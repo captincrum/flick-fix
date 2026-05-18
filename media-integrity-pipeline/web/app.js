@@ -1,25 +1,37 @@
 /* ------------------------[           DOM references           ]------------------------ */
 
-const logPane         = document.getElementById("logPane");
-const splitter        = document.getElementById("splitter");
-const humanLogBtn     = document.getElementById("humanLogBtn");
-const machineLogBtn   = document.getElementById("machineLogBtn");
-const logViewer       = document.getElementById("logViewer");
-const resumeScrollBtn = document.getElementById("resumeScrollBtn");
+const logPane         	= document.getElementById("logPane");
+const splitter        	= document.getElementById("splitter");
+const humanLogBtn     	= document.getElementById("humanLogBtn");
+const machineLogBtn   	= document.getElementById("machineLogBtn");
+const logViewer       	= document.getElementById("logViewer");
+const resumeScrollBtn 	= document.getElementById("resumeScrollBtn");
+const logSpacer  		= document.getElementById("logSpacer");
+const logContent 		= document.getElementById("logContent");
+const ESTIMATED_LINE_HEIGHT = 18;
+const LINES_PER_ENTRY = 8;       
+const ENTRY_HEIGHT = ESTIMATED_LINE_HEIGHT * LINES_PER_ENTRY;
 
 /* ------------------------[          UI state tracking         ]------------------------ */
 
-let logAutoScroll      = true;
-let logOpen            = false;
-let isResizing         = false;
-let startX             = 0;
-let startWidth         = 0;
+let logAutoScroll      	= true;
+let logOpen            	= false;
+let isResizing         	= false;
+let startX             	= 0;
+let startWidth         	= 0;
 
-let activeLogMode      = "live";
+let activeLogMode      	= "live";
+let isScrollFetching 	= false;
 
-let lastRepairStatus   = null;
-let lastRepairUpdateAt = null;
-let currentPhase       = "none"; // "none" | "phase1" | "phase2" | "phase3"
+let lastRepairStatus   	= null;
+let lastRepairUpdateAt 	= null;
+let currentPhase       	= "none"; // "none" | "phase1" | "phase2" | "phase3"
+
+let fullLogLength = 0;
+let windowStart = 0;
+let windowEnd = 200;
+
+let resumeShouldBeVisible = false;
 
 /* ------------------------[        Core UI state helpers       ]------------------------ */
 
@@ -139,7 +151,7 @@ function formatSecondsToHms(totalSeconds) {
 
 function renderLogFile(entries) {
     if (!entries || !Array.isArray(entries) || entries.length === 0) {
-        logViewer.textContent = "No logs found";
+        logContent.textContent = "No logs found";
         return;
     }
 
@@ -184,11 +196,12 @@ function renderLogFile(entries) {
             const value = cleaned[key];
 
             let formattedValue;
-            if (Array.isArray(value)) {
-                formattedValue = `[ ${value.map(v => JSON.stringify(v)).join(", ")} ]`;
-            } else {
-                formattedValue = JSON.stringify(value);
-            }
+			if (Array.isArray(value)) {
+				const cleaned = value.filter(v => v !== null && typeof v === "object" ? Object.keys(v).length > 0 : v !== null && v !== undefined && v !== "");
+				formattedValue = cleaned.length === 0 ? "null" : `[ ${cleaned.map(v => JSON.stringify(v)).join(", ")} ]`;
+			} else {
+				formattedValue = JSON.stringify(value);
+			}
 
             const paddedKey = `"${key}"`.padEnd(longestKey + 2, " ");
             lines.push(`    ${paddedKey} : ${formattedValue}`);
@@ -198,12 +211,13 @@ function renderLogFile(entries) {
         return lines.join("\n");
     }
 
-    if (activeLogMode === "machine") {
+if (activeLogMode === "machine") {
         let text = "";
         for (const e of entries) {
+            if (!e || Object.keys(e).length === 0) continue;
             text += JSON.stringify(e) + "\n\n";
         }
-        logViewer.textContent = text;
+        logContent.textContent = text;
 
         if (logAutoScroll) {
             logViewer.scrollTop = logViewer.scrollHeight;
@@ -213,15 +227,40 @@ function renderLogFile(entries) {
 
     if (activeLogMode === "human") {
         let text = "";
+
+        const globalLongestKey = entries.reduce((max, e) => {
+            if (!e || Object.keys(e).length === 0) return max;
+            return Object.keys(e).reduce((m, k) => k === "AddedAt" ? m : Math.max(m, k.length), max);
+        }, 0);
+
         for (const e of entries) {
-            text += formatEntry(e) + "\n\n";
+            if (!e || Object.keys(e).length === 0) continue;
+            let block = formatEntry(e);
+
+            block = block.replace(/^{\s*|\s*}$/g, "");
+            block = block.replace(/\\\\/g, "\\");
+            block = block.replace(/"/g, "");
+
+            block = block
+                .split("\n")
+                .map(line => {
+                    const match = line.match(/^\s*(\S+)\s+:\s+(.*)/);
+                    if (!match) return line;
+                    const key = match[1].padEnd(globalLongestKey, " ");
+                    return `    ${key}  :  ${match[2]}`;
+                })
+                .join("\n");
+
+            text += block.trimEnd() + "\n\n";
         }
-        logViewer.textContent = text;
+
+        logContent.textContent = text;
 
         if (logAutoScroll) {
             logViewer.scrollTop = logViewer.scrollHeight;
         }
-    }
+        return;
+    }	
 }
 
 /* ------------------------[        Phase 3 console rendering   ]------------------------ */
@@ -284,16 +323,25 @@ function renderStatusBlock(data) {
         return;
     }
 
-    if (currentPhase === "phase2" && s.Type === "ScanProgress") {
-        block += "Phase 2       : Scanning & Logging\n";
-        block += `Mode          : ${s.Mode}\n`;
-        block += `Scanning File : ${s.File}\n`;
-        block += `Elapsed Time  : ${s.Elapsed}\n`;
-        block += `Scanned       : ${s.Scanned}/${s.Total}\n`;
-        block += `Completion    : ${Math.round((s.Scanned / s.Total) * 100)}%\n`;
-        consoleEl.textContent = block;
-        return;
-    }
+	if (currentPhase === "phase2" && s.Type === "ScanProgress") {
+		const workers = s.WorkerFolders || [];
+		let workerLines = "";
+		for (let i = 0; i < 4; i++) {
+			const folder = workers[i] || "Waiting...";
+			const label  = `Worker ${i + 1}`.padEnd(10, " ");
+			workerLines += `${label} : ${folder}\n`;
+		}
+
+		block += "Phase 2    : Scanning & Logging\n";
+		block += `Mode       : ${s.Mode}\n`;
+		block += `Elapsed    : ${s.Elapsed}\n`;
+		block += `Scanned    : ${s.Scanned}/${s.Total}\n`;
+		block += `Completion : ${Math.round((s.Scanned / s.Total) * 100)}%\n`;
+		block += "----------------------------------------\n";
+		block += workerLines;
+		consoleEl.textContent = block;
+		return;
+	}
 
     if (s.Type === "RepairProgress") {
         currentPhase = "phase3";
@@ -388,6 +436,14 @@ async function clearLogs() {
     });
 }
 
+async function apiSaveConfig() {
+    const root     = document.getElementById("rootPath").value.trim();
+    const repaired = document.getElementById("repairedPath").value.trim();
+    const mode     = document.querySelector("input[name='mode']:checked").value;
+    const scanAll  = document.getElementById("scanAllEpisodes").checked;
+    await fetch(`/config/save?root=${encodeURIComponent(root)}&repaired=${encodeURIComponent(repaired)}&mode=${encodeURIComponent(mode)}&scanAll=${scanAll}`);
+}
+
 async function loadConfig() {
     const res  = await fetch("/config");
     const data = await res.json();
@@ -404,6 +460,26 @@ async function loadConfig() {
     if (modeRadio) modeRadio.checked = true;
 }
 
+async function apiLoadLogSlice(start, end) {
+    const res = await fetch(`/logs/slice?start=${start}&end=${end}`);
+    return res.json();
+}
+
+function renderVirtualizedSlice(entries, anchorIndex) {
+    // Don't overwrite existing content with empty — wait for next poll
+    if (!entries || entries.length === 0) return;
+
+    renderLogFile(entries);
+
+    const contentHeight = logContent.offsetHeight;
+    const totalHeight = Math.ceil((fullLogLength / entries.length) * contentHeight);
+    logSpacer.style.height = totalHeight + "px";
+
+    const ratio = fullLogLength > 0 ? anchorIndex / fullLogLength : 0;
+    const topOffset = Math.floor(ratio * totalHeight);
+    logContent.style.top = topOffset + "px";
+}
+
 /* ------------------------[          Log pane controls         ]------------------------ */
 
 function openLogPane() {
@@ -412,13 +488,19 @@ function openLogPane() {
     void logPane.offsetWidth;
     logPane.classList.add("open");
     logPane.style.width = "";
+	
+    if (resumeShouldBeVisible) {
+        resumeScrollBtn.classList.remove("hidden");
+    }
 }
 
 function closeLogPane() {
     logOpen = false;
+	resumeShouldBeVisible = !resumeScrollBtn.classList.contains("hidden");
     logPane.classList.remove("open");
     logPane.style.width = "0px";
     activeLogMode = "live";
+	resumeScrollBtn.classList.add("hidden");
 }
 
 function toggleLogPane() {
@@ -438,21 +520,56 @@ applyModeRules();
 
 /* ------------------------[      Event wiring: log autoscroll  ]------------------------ */
 
-logViewer.addEventListener("scroll", () => {
+let scrollLockTimeout = null;
+let scrollLocked = false;
+
+logViewer.addEventListener("scroll", async () => {
     const atBottom =
         logViewer.scrollTop + logViewer.clientHeight >= logViewer.scrollHeight - 5;
 
-    logAutoScroll = atBottom;
-
-    if (!atBottom) {
-        resumeScrollBtn.classList.remove("hidden");
-    } else {
+    if (atBottom) {
+        scrollLocked = false;
+        logAutoScroll = true;
         resumeScrollBtn.classList.add("hidden");
+        return;
     }
+
+    // User scrolled up — lock the poller out
+    logAutoScroll = false;
+    scrollLocked = true;
+    resumeScrollBtn.classList.remove("hidden");
+
+    // Reset the cooldown every time they scroll
+    if (scrollLockTimeout) clearTimeout(scrollLockTimeout);
+    scrollLockTimeout = setTimeout(() => {
+        scrollLocked = false;
+    }, 1500);
+
+    const ratio = logViewer.scrollTop / (logViewer.scrollHeight - logViewer.clientHeight);
+    const centerIndex = Math.floor(ratio * fullLogLength);
+
+    windowStart = Math.max(0, centerIndex - 100);
+    windowEnd   = Math.min(fullLogLength, windowStart + 200);
+
+    if (isScrollFetching) return;
+    isScrollFetching = true;
+
+    const data = await apiLoadLogSlice(windowStart, windowEnd);
+    fullLogLength = data.total;
+    renderVirtualizedSlice(data.entries, windowStart);
+
+    isScrollFetching = false;
 });
 
-resumeScrollBtn.addEventListener("click", () => {
+resumeScrollBtn.addEventListener("click", async () => {
     logAutoScroll = true;
+
+    windowEnd = fullLogLength;
+    windowStart = Math.max(0, fullLogLength - 200);
+
+    const data = await apiLoadLogSlice(windowStart, windowEnd);
+    renderVirtualizedSlice(data.entries, windowStart);
+
     logViewer.scrollTop = logViewer.scrollHeight;
     resumeScrollBtn.classList.add("hidden");
 });
@@ -465,12 +582,22 @@ humanLogBtn.addEventListener("click", async () => {
     humanLogBtn.classList.toggle("active", isActivating);
     machineLogBtn.classList.remove("active");
 
-    if (isActivating) {
-        activeLogMode = "human";
-        openLogPane();
-        const data = await apiLoadHumanLog();
-        renderLogFile(data.entries);
-    } else {
+	if (isActivating) {
+		activeLogMode = "human";
+		openLogPane();
+
+		// 1. Get the total number of log entries
+		const meta = await apiLoadLogSlice(0, 99999999);
+		fullLogLength = meta.total;
+
+		// 2. Initialize the window to the last 200 entries
+		windowEnd = fullLogLength;
+		windowStart = Math.max(0, fullLogLength - 200);
+
+		// 3. Load the initial slice
+		const data = await apiLoadLogSlice(windowStart, windowEnd);
+		renderVirtualizedSlice(data.entries, windowStart);
+	} else {
         closeLogPane();
     }
 });
@@ -481,12 +608,18 @@ machineLogBtn.addEventListener("click", async () => {
     machineLogBtn.classList.toggle("active", isActivating);
     humanLogBtn.classList.remove("active");
 
-    if (isActivating) {
-        activeLogMode = "machine";
-        openLogPane();
-        const data = await apiLoadMachineLog();
-        renderLogFile(data.entries);
-    } else {
+	if (isActivating) {
+		activeLogMode = "machine";
+		openLogPane();
+
+		const full = await apiLoadLogSlice(0, 1);
+		fullLogLength = full.total;
+		windowEnd = fullLogLength;
+		windowStart = Math.max(0, fullLogLength - 200);
+
+		const data = await apiLoadLogSlice(windowStart, windowEnd);
+		renderVirtualizedSlice(data.entries, windowStart);
+	} else {
         closeLogPane();
     }
 });
@@ -551,7 +684,7 @@ window.addEventListener("mouseup", () => {
     document.body.classList.remove("no-select");
 });
 
-/* ------------------------[      Splitter double‑click toggle  ]------------------------ */
+/* ------------------------[      Splitter double-click toggle  ]------------------------ */
 
 splitter.addEventListener("dblclick", () => {
     if (!logOpen) return;
@@ -613,6 +746,7 @@ document.getElementById("browseRoot").addEventListener("click", async () => {
     const result = await apiBrowseFolder();
     if (result.ok) {
         document.getElementById("rootPath").value = result.path;
+        apiSaveConfig();
     }
 });
 
@@ -620,8 +754,17 @@ document.getElementById("browseRepaired").addEventListener("click", async () => 
     const result = await apiBrowseFolder();
     if (result.ok) {
         document.getElementById("repairedPath").value = result.path;
+        apiSaveConfig();
     }
 });
+
+document.getElementById("rootPath").addEventListener("change", apiSaveConfig);
+
+document.getElementById("repairedPath").addEventListener("change", apiSaveConfig);
+
+document.getElementById("scanAllEpisodes").addEventListener("change", apiSaveConfig);
+
+document.querySelectorAll("input[name='mode']").forEach(r => r.addEventListener("change", apiSaveConfig));
 
 document.getElementById("clearLogsBtn").addEventListener("click", clearLogs);
 
@@ -664,14 +807,30 @@ setInterval(async () => {
 
 setInterval(async () => {
     if (!logOpen) return;
+    if (isScrollFetching) return;
+    if (scrollLocked) return; 
 
-    if (activeLogMode === "human") {
-        const data = await apiLoadHumanLog();
-        renderLogFile(data.entries);
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) return;
+
+    const shouldAutoScroll = logAutoScroll;
+
+    if (shouldAutoScroll) {
+        const meta = await apiLoadLogSlice(0, 1);
+        fullLogLength = meta.total;
+        windowEnd   = fullLogLength;
+        windowStart = Math.max(0, fullLogLength - 200);
     }
 
-    if (activeLogMode === "machine") {
-        const data = await apiLoadMachineLog();
-        renderLogFile(data.entries);
+    const data = await apiLoadLogSlice(windowStart, windowEnd);
+    if (data.total > 0) fullLogLength = data.total;
+
+    renderVirtualizedSlice(data.entries, windowStart);
+
+    if (shouldAutoScroll) {
+        requestAnimationFrame(() => {
+            logViewer.scrollTop = logViewer.scrollHeight;
+        });
     }
+
 }, 250);

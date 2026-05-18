@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <title>Unified Media Integrity Pipeline</title>
-	<link rel="icon" type="image/x-icon" href="icon.ico">
+	<link rel="icon" type="image/x-icon" href="favicon002.ico">
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -92,9 +92,15 @@
 		<div id="logPaneWrapper" class="log-pane-wrapper">
 			<aside id="logPane" class="log-pane">
 				<div class="card group log-group">
-					<h2 class="group-title">Live Log</h2>
 
-					<pre id="logViewer" class="log-viewer"></pre>
+					<div class="group-title-wrapper">
+						<h2 class="group-title">Live Log</h2>
+					</div>
+
+					<div id="logViewer" class="log-viewer">
+						<div id="logSpacer" class="log-spacer"></div>
+						<div id="logContent" class="log-content"></div>
+					</div>
 
 					<button id="resumeScrollBtn" class="resume-scroll hidden">⮟</button>
 

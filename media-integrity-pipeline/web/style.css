@@ -200,7 +200,27 @@ input[type="text"] {
 
 #browseRoot,
 #browseRepaired,
-#clearLogsBtn { width: 80px; }
+#clearLogsBtn,
+.group-title-wrapper { 
+	transition: opacity .75s cubic-bezier(0, 0, 0.58, 1);
+	width: 85px;
+}
+
+#clearLogsBtn,
+.group-title-wrapper {
+	width: 80px;
+}
+
+.log-pane.open #clearLogsBtn,
+.log-pane.open .group-title-wrapper {
+    opacity: 1;
+}
+
+.log-pane:not(.open) #clearLogsBtn,
+.log-pane:not(.open) .group-title-wrapper {
+    opacity: 0;
+    pointer-events: none;
+}
 
 /* ------------------------[ UI: Button states ]---------------------- */
 
@@ -268,9 +288,14 @@ input[type="text"] {
 }
 
 .log-pane.open {
-    --open-width: 33%;
+    --open-width: 55%;
     width: var(--open-width);
 	padding-right: 25px;
+}
+
+.log-pane.open #clearLogsBtn.disabled-ui {
+    opacity: 0.45;
+    pointer-events: none;
 }
 
 .log-pane.dragging {
@@ -279,7 +304,7 @@ input[type="text"] {
 
 /* ------------------------[ UI: Live log card ]---------------------- */
 .log-group {
-    width: 97%;
+    width: 98%;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -296,11 +321,32 @@ input[type="text"] {
     margin: 6px 0 0 0;
     background: var(--bg-console);
     border-radius: 20px;
-    padding: 8px;
     font-family: Consolas, monospace;
     font-size: 12px;
     color: var(--text);
+    overflow-x: auto;
     overflow-y: auto;
+    position: relative;
+}
+
+.log-spacer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    pointer-events: none;
+}
+
+.log-content {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 8px;
+    white-space: pre;
+    word-wrap: normal;
+	overflow-x: visible;
+	user-select: text;
+    cursor: text;
 }
 
 .log-footer {
@@ -327,7 +373,7 @@ input[type="text"] {
 
 .log-pane,
 .log-group,
-.log-viewer { user-select: none; }
+.log-viewer { user-select: text; }
 
 /* ------------------------[ UI: Modal ]---------------------- */
 .modal {
@@ -400,7 +446,7 @@ input[type="text"] {
 .resume-scroll {
     position: absolute;
     bottom: 73px;
-	right: 35px;
+	right: 40px;
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -424,16 +470,30 @@ input[type="text"] {
     transform: translateY(-1px);
 }
 
-.resume-scroll.hidden { display: none; }
+#resumeScrollBtn {
+    transition: opacity .75s cubic-bezier(0, 0, 0.58, 1);
+}
+
+.resume-scroll.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
 
 /* ------------------------[ UI: Scrollbar styling ]---------------------- */
-::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar { 
+	width: 10px; 
+	height: 10px;
+}
 
-::-webkit-scrollbar-track { background: #1a1a1a; }
+::-webkit-scrollbar-track { 
+	background: #1a1a1a; 
+}
 
 ::-webkit-scrollbar-thumb {
     background: #333a4e;
     border-radius: 20px;
 }
 
-::-webkit-scrollbar-thumb:hover { background: #434a5e; }
+::-webkit-scrollbar-thumb:hover { 
+	background: #434a5e; 
+}

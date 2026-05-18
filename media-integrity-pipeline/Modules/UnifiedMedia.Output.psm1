@@ -24,7 +24,6 @@ Root Path     : $($Context.RootPath)
 "@
 
     UM-Output $block
-    Start-Sleep -Milliseconds 500
 }
 
 # -----------------------[ Console Output: Phase 2 ]------------------------- #
@@ -34,12 +33,13 @@ function UM-PhaseTwoConsole {
     $elapsedTS = ((Get-Date) - $Global:UM_ScanStart).ToString("hh\:mm\:ss")
 
     Write-Output ([pscustomobject]@{
-        Type       = "ScanProgress"
-        Mode       = (UM-PrettyMode $Global:UM_Mode)
-        File       = $Global:UM_ScanFile
-        Elapsed    = $elapsedTS
-        Scanned    = $Global:UM_ScannedCount
-        Total      = $Global:UM_ScanTotal
+        Type          = "ScanProgress"
+        Mode          = (UM-PrettyMode $Global:UM_Mode)
+        Elapsed       = $elapsedTS
+        Scanned       = $Global:UM_ScannedCount
+        Total         = $Global:UM_ScanTotal
+        File          = $Global:UM_ScanFile
+        WorkerFolders = $Global:UM_WorkerFolders
     })
 }
 

@@ -46,12 +46,19 @@ function UM-ReadUnifiedLog {
 function UM-AppendLogEntry {
     param([hashtable]$Entry)
 
-    # Add timestamp
     $Entry["Timestamp"] = (Get-Date).ToString("s")
 
-    # MACHINE LOG ONLY
     $machineJson = $Entry | ConvertTo-Json -Depth 10 -Compress
-    Add-Content -Path $Global:UnifiedMachineLogPath -Value ($machineJson + "`n")
+
+    $writeMutex = New-Object System.Threading.Mutex($false, "Global\UMLogWrite")
+    try {
+        $writeMutex.WaitOne() | Out-Null
+        Add-Content -Path $Global:UnifiedMachineLogPath -Value ($machineJson + "`n")
+    }
+    finally {
+        $writeMutex.ReleaseMutex()
+        $writeMutex.Dispose()
+    }
 }
 
 # ----------------------------[ Log Event Types ]---------------------------- #

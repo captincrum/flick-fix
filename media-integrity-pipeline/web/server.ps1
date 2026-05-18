@@ -129,7 +129,7 @@ while ($true) {
 
         $output = $null
         try {
-            $output = Receive-Job $Global:UM_Job -Keep -ErrorAction SilentlyContinue
+            $output = Receive-Job $Global:UM_Job -ErrorAction SilentlyContinue
         } catch { }
 
         if ($output) {
@@ -171,7 +171,7 @@ while ($true) {
         "/index.html" { Send-File $response "$root\index.html" "text/html" }
         "/style.css"  { Send-File $response "$root\style.css" "text/css" }
         "/app.js"     { Send-File $response "$root\app.js" "application/javascript" }
-		"/icon.ico"   { Send-File $response "$root\icon.ico" "image/x-icon" }
+		"/favicon002.ico"{ Send-File $response "$root\favicon002.ico" "image/x-icon" }
 
         # ------------------------[ API: Buttons ]--------------------------- #
 
@@ -207,7 +207,6 @@ while ($true) {
 
 			Send-Json $response @{ ok = $true }
 		}
-
         
 		"/cancel" {
             Stop-Pipeline
@@ -276,7 +275,64 @@ while ($true) {
                 Send-Json $response @{ ok = $false; error = $_.Exception.Message }
             }
         }
-        
+
+		"/logs/slice" {
+			try {
+				$start = [int]$request.QueryString["start"]
+				$end   = [int]$request.QueryString["end"]
+
+				if ($start -lt 0) { $start = 0 }
+				if ($end -lt $start) { $end = $start + 1 }
+
+				$path = $Global:UnifiedMachineLogPath
+				if (-not (Test-Path $path)) {
+					Send-Json $response @{ ok = $true; entries = @(); total = 0 }
+					continue
+				}
+
+				# Read entire file fresh
+				$raw = Get-Content -Path $path -Raw -ErrorAction SilentlyContinue
+				$lines = $raw -split "`n"
+
+				# Build array of ONLY valid JSON entries
+				$valid = @()
+				foreach ($line in $lines) {
+					$trim = $line.Trim()
+					if ($trim -eq "") { continue }
+
+					try {
+						$obj = $trim | ConvertFrom-Json
+						$valid += $obj
+					} catch {
+						# Skip invalid JSON lines
+					}
+				}
+
+				$total = $valid.Count
+
+				# Clamp slice bounds
+				if ($start -ge $total) { $start = $total - 1 }
+				if ($start -lt 0) { $start = 0 }
+
+				$end = [Math]::Min($end, $total)
+
+				# Extract slice
+				$slice = @()
+				for ($i = $start; $i -lt $end; $i++) {
+					$slice += $valid[$i]
+				}
+
+				Send-Json $response @{
+					ok      = $true
+					entries = $slice
+					total   = $total
+				}
+			}
+			catch {
+				Send-Json $response @{ ok = $false; error = $_.Exception.Message }
+			}
+		}
+       
 		"/logs/clear" {
             try {
                 if (Test-Path $Global:UnifiedMachineLogPath) {
@@ -301,7 +357,16 @@ while ($true) {
             }
         }
 
-        default {
+		"/config/save" {
+			$config.RootPath        = $request.QueryString["root"]
+			$config.RepairedPath    = $request.QueryString["repaired"]
+			$config.Mode            = $request.QueryString["mode"]
+			$config.ScanAllEpisodes = ($request.QueryString["scanAll"] -eq "true")
+			Save-Config $config
+			Send-Json $response @{ ok = $true }
+		}
+        
+		default {
             $response.StatusCode = 404
             $response.OutputStream.Write(
                 [System.Text.Encoding]::UTF8.GetBytes("404 Not Found"), 0, 13

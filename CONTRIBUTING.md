@@ -1,5 +1,5 @@
-# Contributing to Media Integrity Pipeline
-Thank you for your interest in contributing to Media Integrity Pipeline. This project is designed to be modular, maintainable, and predictable. To keep the codebase clean and consistent, please follow the guidelines below.
+# Contributing to FlickFix
+Thank you for your interest in contributing to FlickFix. This project is designed to be modular, maintainable, and predictable. To keep the codebase clean and consistent, please follow the guidelines below.
 
 ## How to Contribute
 ### 1. Reporting Issues

@@ -5,7 +5,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     Start-Sleep -Milliseconds 250 												# Give the server a moment to start
 
     $edgeRunning = Get-Process msedge -ErrorAction SilentlyContinue | Where-Object {
-        $_.MainWindowTitle -eq "Unified Media Integrity Pipeline"
+        $_.MainWindowTitle -eq "FlickFix"
     }
 
     if (-not $edgeRunning) {

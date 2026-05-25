@@ -1,8 +1,8 @@
-# Media Integrity Pipeline
+# FlickFix
 
 Automated scanning, repairing, quality-checking, and smart compression for movie and TV libraries.
 
-Media Integrity Pipeline is a full media-maintenance system built on PowerShell with a modern web-based GUI. It scans movie and TV libraries for corruption, repairs damaged files, evaluates quality, and intelligently compresses your library using FFmpeg and x265 — all from a clean interface with no command-line knowledge required.
+FlickFix is a full media-maintenance system built on PowerShell with a modern web-based GUI. It scans movie and TV libraries for corruption, repairs damaged files, evaluates quality, and intelligently compresses your library using FFmpeg and x265 — all from a clean interface with no command-line knowledge required.
 
 ---
 
@@ -96,7 +96,7 @@ Run any stage independently or as a full pipeline:
 
 Clone the repository:
 ```
-git clone https://github.com/captincrum/media-integrity-pipeline.git
+git clone https://github.com/captincrum/flick-fix.git
 ```
 
 ---

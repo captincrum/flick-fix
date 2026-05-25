@@ -22,3 +22,5 @@ obj/
 *.suo
 *.user
 *.vs
+Logs/
+

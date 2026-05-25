@@ -1,0 +1,11 @@
+﻿{
+    "RootPath":  "D:\\Shows\\3 Body Problem",
+    "RepairedPath":  "F:\\",
+    "Mode":  "SmartCompression",
+    "ScanAllEpisodes":  true,
+    "AccurateMode":  false,
+    "CompressionOutputPath":  "F:\\",
+    "CrfValue":  22,
+    "Workers":  2,
+    "RunMode":  "Compress"
+}

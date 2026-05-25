@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Unified Media Integrity Pipeline</title>
+	<link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+
+    <!-- TOP HEADER (Copilot style) -->
+    <header class="top-header">
+        <h1>Unified Media Integrity Pipeline</h1>
+        <div id="statusBadge" class="badge idle">Idle</div>
+    </header>
+
+    <!-- MAIN SHELL: LEFT (original layout) + SPLITTER + LOG PANEL -->
+    <div class="shell">
+
+        <!-- LEFT COLUMN -->
+        <section class="left-pane">
+
+            <!-- TOP BLOCK: scrollable region (Settings + Mode + Status) -->
+            <div class="top-block">
+
+                <!-- SETTINGS -->
+                <div class="card group">
+                    <h2 class="group-title">Settings</h2>
+
+                    <div class="field">
+                        <label>Library Root:</label>
+                        <div class="field-row">
+                            <input id="rootPath" type="text" placeholder="Select library root..." />
+                            <button id="browseRoot" class="btn small">Browse</button>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>Repaired Output:</label>
+                        <div class="field-row">
+                            <input id="repairedPath" type="text" placeholder="Select output folder..." />
+                            <button id="browseRepaired" class="btn small">Browse</button>
+                        </div>
+                    </div>
+
+					<div class="toggle-row">
+                        <span class="toggle-label">Quick</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="scanAllEpisodes" />
+                            <span class="toggle-track"></span>
+                        </label>
+                        <span class="toggle-label">Full</span>
+                    </div>
+                    <p id="scanModeDesc" class="smart-desc">Samples the first episode per season - fast results across large libraries</p>
+
+					<div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
+                        <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                            <span class="toggle-label">Workers</span>
+                            <input type="range" id="workerCount" min="1" max="8" value="4" style="flex:1;" />
+                            <span id="workerValue" class="toggle-label">4</span>
+                        </div>
+                        <p id="workerDesc" class="smart-desc">Recommended</p>
+                    </div>
+                </div>
+
+				<!-- MODE (radio buttons) -->
+				<div class="card group">
+					<h2 class="group-title">Operation Mode</h2>
+					<div class="mode-row" style="flex-wrap: wrap; row-gap: 6px;">
+						<label><input type="radio" name="mode" value="Full" checked /> Scan & Repair</label>
+						<label><input type="radio" name="mode" value="ScanOnly" /> Scan</label>
+						<label><input type="radio" name="mode" value="RepairOnly" /> Repair</label>
+						<label><input type="radio" name="mode" value="SmartCompression" /> Compression</label>
+					</div>
+				</div>
+
+				<!-- SMART COMPRESSION OPTIONS (hidden unless SmartCompression selected) -->
+				<div id="smartOptions" class="card group hidden">
+					<h2 class="group-title">Smart Compression Mode</h2>
+					<div class="toggle-row">
+						<span class="toggle-label">Fast</span>
+						<label class="toggle-switch">
+							<input type="checkbox" id="accurateMode" />
+							<span class="toggle-track"></span>
+						</label>
+						<span class="toggle-label">Accurate</span>
+						<button id="reviewBtn" class="btn small disabled-ui" style="margin-left: auto;">Review</button>
+					</div>
+					<p id="smartMethodDesc" class="smart-desc">ffprobe analysis only - instant results across your entire library</p>
+
+					<div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
+						<div style="display:flex; align-items:center; gap:10px; width:100%;">
+							<span class="toggle-label">CRF</span>
+							<input type="range" id="crfSlider" min="18" max="28" value="22" style="flex:1;" />
+							<span id="crfValue" class="toggle-label">22</span>
+						</div>
+						<p id="crfDesc" class="smart-desc">Recommended - ~97.5% quality retained</p>
+					</div>
+				</div>
+
+                <!-- STATUS (console-style text) -->
+                <div class="card group status-group">
+                    <h2 class="group-title">Console</h2>
+                    <pre id="consoleOutput" class="console"></pre>
+                </div>
+
+            </div> <!-- end .top-block -->
+
+            <!-- BOTTOM BUTTONS: anchored to bottom of left-pane -->
+            <div class="bottom-fixed">
+                <div class="bottom-row">
+                    <div class="button-column">
+                        <button id="startBtn" class="btn primary">Start</button>
+                        <button id="cancelBtn" class="btn danger">Cancel</button>
+                    </div>
+                    <div class="button-column">
+                        <button id="humanLogBtn" class="btn toggle">Human Log</button>
+                        <button id="machineLogBtn" class="btn toggle">Machine Log</button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- SPLITTER -->
+        <div id="splitter" class="splitter"></div>
+
+		<!-- RIGHT LOG PANEL (Live Log) -->
+		<div id="logPaneWrapper" class="log-pane-wrapper">
+			<aside id="logPane" class="log-pane">
+				<div class="card group log-group">
+					<div class="group-title-wrapper" style="display:flex; align-items:center; justify-content:space-between; width:100%; min-width:0; overflow:hidden;">
+						<h2 class="group-title" style="margin:0; white-space:nowrap; flex-shrink:0;">Live Log</h2>
+					<div id="logFilterRow" class="log-filter-row">
+						<input id="logFilterInput" type="text" placeholder="Search Filter..." />
+						<button id="logFilterClear" class="btn small">✕</button>
+					</div>
+				</div>
+
+					<div id="logViewer" class="log-viewer">
+						<div id="logSpacer" class="log-spacer"></div>
+						<div id="logContent" class="log-content"></div>
+					</div>
+
+					<button id="resumeScrollBtn" class="resume-scroll hidden">⮟</button>
+
+					<div class="log-footer">
+						<button id="clearLogsBtn" class="btn danger small">Clear Logs</button>
+					</div>
+				</div>
+			</aside>
+		</div>
+
+
+    </div>
+</div>
+<!-- COMPRESSION RESULTS MODAL -->
+<div id="compressionModal" class="modal hidden">
+    <div class="compression-modal-content">
+
+        <!-- HEADER -->
+        <div class="compression-header">
+            <h2>Compression Results</h2>
+            <button id="compressionClose" class="compression-close">✕</button>
+        </div>
+
+        <!-- BODY -->
+        <div class="compression-body">
+
+            <!-- LEFT PANEL -->
+            <div class="compression-left">
+				<div class="compression-output-section">
+                    <label class="comp-label">Output Location:</label>
+                    <div class="field-row">
+                        <input id="compressionOutputPath" type="text" placeholder="Select output folder..." />
+                        <button id="compressionBrowse" class="btn small">Browse</button>
+                    </div>
+                </div>
+                <div class="toggle-row" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px; margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                        <span class="toggle-label">Workers</span>
+                        <input type="range" id="compressWorkerCount" min="1" max="8" value="2" style="flex:1;" />
+                        <span id="compressWorkerValue" class="toggle-label">2</span>
+                    </div>
+                    <p id="compressWorkerDesc" class="smart-desc">2 workers - recommended for compression</p>
+                </div>
+                <div class="compression-summary" id="compressionSummary"></div>
+                <button id="compressionStart" class="btn primary compression-start-btn">Compress</button>
+            </div>
+
+            <!-- DIVIDER -->
+            <div class="compression-divider"></div>
+
+			<!-- RIGHT PANEL: TREE -->
+            <div class="compression-right">
+                <div class="compression-tree-wrapper">
+                    <table id="compressionTree" class="compression-tree">
+                        <colgroup>
+                            <col id="colName" />
+                            <col id="colSize" style="width: 200px;" />
+                            <col id="colVerdict" style="width: 130px;" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th class="tree-th tree-th-name">
+                                    Name
+                                    <div class="col-resizer" id="nameResizer"></div>
+                                </th>
+                                <th class="tree-th tree-th-size">Original &#8594; Compressed</th>
+                                <th class="tree-th tree-th-verdict">Verdict</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compressionTreeBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="confirmModal" class="modal hidden">
+    <div class="modal-content">
+		<p>
+			You are about to delete UnifiedLog.json and HumanLog.json.<br>
+			This action cannot be undone and may require a full library rescan.<br><br>
+			Do you want to continue?
+		</p>
+
+        <div class="modal-buttons">
+            <button id="confirmYes">OK</button>
+            <button id="confirmNo">Cancel</button>
+        </div>
+    </div>
+</div>
+<div id="errorModal" class="modal hidden">
+    <div class="modal-content">
+        <p id="errorMessage"></p>
+        <div class="modal-buttons">
+            <button id="errorOk">OK</button>
+        </div>
+    </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

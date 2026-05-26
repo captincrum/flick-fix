@@ -65,6 +65,24 @@ function UM-PhaseThreeConsole {
         AttemptTime   = $attemptTS
         FileTime      = $fileTS
         Elapsed       = $sessionTS
+        WorkerFolders = $Global:UM_WorkerFolders
+    })
+}
+
+# -----------------------[ Console Output: Repair Worker Pool ]-------------- #
+
+function UM-RepairWorkerConsole {
+
+    $sessionTS = if ($Global:UM_RepairSessionStart) {
+        ((Get-Date) - $Global:UM_RepairSessionStart).ToString("hh\:mm\:ss")
+    } else { "00:00:00" }
+
+    Write-Output ([pscustomobject]@{
+        Type          = "RepairProgress"
+        ItemIndex     = $Global:UM_RepairDoneCount
+        TotalItems    = $Global:UM_RepairTotalItems
+        Elapsed       = $sessionTS
+        WorkerFolders = $Global:UM_WorkerFolders
     })
 }
 
@@ -90,30 +108,16 @@ function UM-CompressHeartbeatConsole {
 
 function UM-RepairHeartbeatConsole {
 
-    $s = $Global:UM_LatestStatus
-    if (-not $s -or -not $s.ItemIndex) { return }
-
-    $attemptTS = if ($Global:UM_RepairAttemptStart) {
-        ((Get-Date) - $Global:UM_RepairAttemptStart).ToString("hh\:mm\:ss")
-    } else { "00:00:00" }
-    $fileTS = if ($Global:UM_RepairFileStart) {
-        ((Get-Date) - $Global:UM_RepairFileStart).ToString("hh\:mm\:ss")
-    } else { "00:00:00" }
     $sessionTS = if ($Global:UM_RepairSessionStart) {
         ((Get-Date) - $Global:UM_RepairSessionStart).ToString("hh\:mm\:ss")
     } else { "00:00:00" }
 
     Write-Output ([pscustomobject]@{
         Type          = "RepairProgress"
-        ItemIndex     = $s.ItemIndex
-        TotalItems    = $s.TotalItems
-        StageFriendly = $s.StageFriendly
-        CRF           = $s.CRF
-        SourcePath    = $s.SourcePath
-        AttemptCount  = $s.AttemptCount
-        AttemptTime   = $attemptTS
-        FileTime      = $fileTS
+        ItemIndex     = $Global:UM_RepairDoneCount
+        TotalItems    = $Global:UM_RepairTotalItems
         Elapsed       = $sessionTS
+        WorkerFolders = $Global:UM_WorkerFolders
     })
 }
 

@@ -46,6 +46,7 @@ function setUIRunningState(isRunning) {
     const modeRadios     = document.querySelectorAll("input[name='mode']");
     const clearLogsBtn   = document.getElementById("clearLogsBtn");
     const startBtn       = document.getElementById("startBtn");
+    const cancelBtn      = document.getElementById("cancelBtn");
 
     if (isRunning) {
         rootInput.disabled      = true;
@@ -63,6 +64,7 @@ function setUIRunningState(isRunning) {
         document.querySelector("#scanAllEpisodes").closest(".toggle-row").classList.add("disabled-ui");		
         clearLogsBtn.disabled   = true;
         startBtn.disabled       = true;
+        cancelBtn.disabled      = false;
         modeRadios.forEach(r => (r.disabled = true));
 
         rootInput.classList.add("disabled-ui");
@@ -72,6 +74,7 @@ function setUIRunningState(isRunning) {
         scanAll.classList.add("disabled-ui");
         clearLogsBtn.classList.add("disabled-ui");
         startBtn.classList.add("disabled-ui");
+        cancelBtn.classList.remove("disabled-ui");
         modeRadios.forEach(r => r.classList.add("disabled-ui"));
     } else {
         rootInput.disabled      = false;
@@ -89,6 +92,7 @@ function setUIRunningState(isRunning) {
         document.querySelector("#scanAllEpisodes").closest(".toggle-row").classList.remove("disabled-ui");		
         clearLogsBtn.disabled   = false;
         startBtn.disabled       = false;
+        cancelBtn.disabled      = true;
         modeRadios.forEach(r => (r.disabled = false));
 
         rootInput.classList.remove("disabled-ui");
@@ -98,6 +102,7 @@ function setUIRunningState(isRunning) {
         scanAll.classList.remove("disabled-ui");
         clearLogsBtn.classList.remove("disabled-ui");
         startBtn.classList.remove("disabled-ui");
+        cancelBtn.classList.add("disabled-ui");
         modeRadios.forEach(r => r.classList.remove("disabled-ui"));
     }
 }
@@ -396,31 +401,56 @@ function renderRepairConsole() {
 
     const consoleEl = document.getElementById("consoleOutput");
     const s         = lastRepairStatus;
+    const workers   = s.WorkerFolders || [];
+    const pct       = s.TotalItems > 0 ? Math.round((s.ItemIndex / s.TotalItems) * 100) : 0;
 
-    const now      = Date.now();
-    const deltaSec = lastRepairUpdateAt ? Math.floor((now - lastRepairUpdateAt) / 1000) : 0;
+    let workerLines = "";
+    const workerDisplayCount = parseInt(document.getElementById("workerCount").value) || 4;
+    for (let i = 0; i < workerDisplayCount; i++) {
+        const w = workers[i];
+        const workerLabel = `Worker ${i + 1}`.padEnd(17, " ");
 
-    const attemptBase = parseHmsToSeconds(s.AttemptTime);
-    const fileBase    = parseHmsToSeconds(s.FileTime);
-    const elapsedBase = parseHmsToSeconds(s.Elapsed);
+        if (!w || typeof w === "string") {
+            workerLines += `${workerLabel}: ${w || "Waiting..."}\n\n`;
+            continue;
+        }
 
-    const attemptTime = formatSecondsToHms(attemptBase + deltaSec);
-    const fileTime    = formatSecondsToHms(fileBase + deltaSec);
-    const elapsedTime = formatSecondsToHms(elapsedBase + deltaSec);
+        let fileElapsed = "00:00:00";
+        if (w.FileStart) {
+            const sec = Math.floor((Date.now() - Date.parse(w.FileStart)) / 1000);
+            const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
+            const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+            const ss = String(sec % 60).padStart(2, "0");
+            fileElapsed = `${hh}:${mm}:${ss}`;
+        }
+
+        let attemptElapsed = "00:00:00";
+        if (w.AttemptStart) {
+            const sec = Math.floor((Date.now() - Date.parse(w.AttemptStart)) / 1000);
+            const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
+            const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+            const ss = String(sec % 60).padStart(2, "0");
+            attemptElapsed = `${hh}:${mm}:${ss}`;
+        }
+
+        workerLines += `${workerLabel}: ${w.Folder || "--"}\n`;
+        workerLines += `${"  File".padEnd(17, " ")}: ${w.Episode || "--"}\n`;
+        workerLines += `${"  Repair".padEnd(17, " ")}: ${w.Repair || "--"}\n`;
+        workerLines += `${"  Attempt".padEnd(17, " ")}: ${w.Attempt || 0}\n`;
+        workerLines += `${"  File Time".padEnd(17, " ")}: ${fileElapsed}\n`;
+        workerLines += `${"  Attempt Time".padEnd(17, " ")}: ${attemptElapsed}\n\n`;
+    }
 
     let block = "";
-	block += "----------------------------------------\n";
+    block += "----------------------------------------\n";
     block += "Phase 3          : Repairing & Logging\n";
-    block += `Mode             : ${s.Mode}\n`;
-    block += `Repairing        : ${s.SourcePath}\n`;
-    block += `Repair Attempt   : ${s.AttemptCount + 1}\n`;
-    block += `Attempt Time     : ${attemptTime}\n`;
+    block += `Mode             : ${s.Mode || "Repair"}\n`;
+    block += `Elapsed Time     : ${s.Elapsed || "00:00:00"}\n`;
+    block += `Repaired         : ${s.ItemIndex} / ${s.TotalItems}\n`;
+    block += `Completion       : ${pct}%\n`;
     block += "----------------------------------------\n";
-    block += `Repairing File   : ${s.ItemIndex} / ${s.TotalItems}\n`;
-    block += `File Time        : ${fileTime}\n`;
-    block += "----------------------------------------\n";
-    block += `Repair Type      : ${s.StageFriendly} (CRF ${s.CRF})\n`;
-    block += `Elapsed Time     : ${elapsedTime}\n`;
+    block += workerLines;
+
     consoleEl.textContent = block;
 }
 
@@ -758,6 +788,8 @@ document.querySelectorAll("input[name='mode']").forEach(radio => {
 });
 
 applyModeRules();
+document.getElementById("cancelBtn").disabled = true;
+document.getElementById("cancelBtn").classList.add("disabled-ui");
 
 /* ------------------------[      Event wiring: log autoscroll  ]------------------------ */
 

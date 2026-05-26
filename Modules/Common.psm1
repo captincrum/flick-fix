@@ -322,7 +322,17 @@ function Invoke-UMWorkerPool {
             if (Test-Path $sf) {
                 try {
                     $s = Get-Content $sf -Raw | ConvertFrom-Json
-                    if ($s.Sample) {
+                    if ($s.IsRepair) {
+                        $folders[$w - 1] = [ordered]@{
+                            Folder       = $s.Folder
+                            Episode      = $s.Episode
+                            Repair       = $s.Repair
+                            Attempt      = $s.Attempt
+                            FileStart    = $s.FileStart
+                            AttemptStart = $s.AttemptStart
+                            IsRepair     = $true
+                        }
+                    } elseif ($s.Sample) {
                         $folders[$w - 1] = [ordered]@{
                             Folder       = $s.Folder
                             Episode      = $s.Episode

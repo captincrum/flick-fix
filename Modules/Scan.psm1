@@ -226,19 +226,25 @@ function Invoke-UMScan {
 
     UM-PhaseOneConsole -Context $Context
 
-    $unifiedLog = UM-ReadUnifiedLog
-    $scanLog    = @()
-
-    if ($unifiedLog) {
-        $scanLog = $unifiedLog |
-            Where-Object {
-                $_.Type -eq "Scan" -and
-                $_.Path -like "$($Context.RootPath)*"
+    # Build skip-list from raw log lines (avoids parsing every entry as JSON)
+    $scanLog = @()
+    if (Test-Path $Global:UnifiedMachineLogPath) {
+        $rootEscaped = $Context.RootPath.Replace("\", "\\")
+        $lines = [System.IO.File]::ReadAllLines($Global:UnifiedMachineLogPath)
+        foreach ($line in $lines) {
+            if ($line.Contains('"Type":"Scan"') -and $line.Contains($rootEscaped)) {
+                try { $scanLog += $line.Trim() | ConvertFrom-Json } catch {}
             }
+        }
     }
 
-    $existing = $scanLog | Where-Object { $_.Path -like "$($Context.RootPath)*" }
-    $Global:UM_AlreadyScanned = ($existing.Count -gt 0)
+    $Global:UM_AlreadyScanned = ($scanLog.Count -gt 0)
+
+    # Build a HashSet for O(1) path lookups instead of O(n) array scans
+    $scannedPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $scanLog) {
+        $null = $scannedPaths.Add($entry.Path)
+    }
 
     $scanAllRef = [ref]$false
     $allFiles   = Get-UMFilesToScan `
@@ -250,13 +256,13 @@ function Invoke-UMScan {
 
     # Filter out already-scanned files
     $filesToScan = $allFiles | Where-Object {
-        -not (UM-IsScanned -Path $_.FullName -ScanLog $scanLog)
+        -not $scannedPaths.Contains($_.FullName)
     }
 
     $totalFiles     = $allFiles.Count
     $Global:UM_TotalFiles = $totalFiles
 
-    $scannedFiles   = $scanLog.Count   # previously scanned count
+    $scannedFiles   = $scannedPaths.Count
 
 
     # -------------------------[ Worker pool scan ]------------------------ #

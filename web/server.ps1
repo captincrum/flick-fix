@@ -57,11 +57,65 @@ function Send-File {
     $response.OutputStream.Write($bytes, 0, $bytes.Length)
 }
 
+# -------------------------[ Log Cache ]----------------------------------- #
+
+function Update-LogCache {
+    $path = $Global:UnifiedMachineLogPath
+    if (-not $path -or -not (Test-Path $path)) {
+        return
+    }
+
+    try {
+        $fileSize = (Get-Item $path).Length
+    } catch {
+        return   # file busy
+    }
+
+    if ($fileSize -eq $Global:UM_LogCacheSize) {
+        return
+    }
+
+    if ($fileSize -lt $Global:UM_LogCacheSize) {
+        $Global:UM_LogCache.Clear()
+        $Global:UM_LogCacheSize = 0
+    }
+
+    $stream = $null
+    try {
+        $stream = [System.IO.FileStream]::new($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        $stream.Seek($Global:UM_LogCacheSize, [System.IO.SeekOrigin]::Begin) | Out-Null
+        $newBytes = New-Object byte[] ($fileSize - $Global:UM_LogCacheSize)
+        $stream.Read($newBytes, 0, $newBytes.Length) | Out-Null
+    }
+    catch {
+        return   # file busy — try again next cycle
+    }
+    finally {
+        if ($stream) { $stream.Close() }
+    }
+
+    $newText  = [System.Text.Encoding]::UTF8.GetString($newBytes)
+    $newLines = $newText -split "`n"
+
+    foreach ($line in $newLines) {
+        $trim = $line.Trim()
+        if ($trim -ne "" -and $trim -ne "[]") {
+            $Global:UM_LogCache.Add($trim)
+        }
+    }
+
+    $Global:UM_LogCacheSize = $fileSize
+}
+
 # -------------------------[ Global State ]--------------------------------- #
 
 $Global:UM_Status             = "idle"
 $Global:UM_LatestStatus       = $null
 $Global:UM_Job                = $null
+
+# Log cache — avoids re-reading the entire file on every request
+$Global:UM_LogCache           = [System.Collections.Generic.List[string]]::new()
+$Global:UM_LogCacheSize       = 0
 
 # -------------------------[ Start Pipeline ]------------------------------- #
 
@@ -236,6 +290,18 @@ while ($true) {
             Send-Json $response @{ status = $payload }
         }
         
+		"/status-all" {
+			Update-LogCache
+			$payload = $Global:UM_LatestStatus
+			if ($payload) {
+				$payload | Add-Member -NotePropertyName Mode -NotePropertyValue (UM-PrettyMode $Global:UM_Mode) -Force
+			}
+			Send-Json $response @{
+				status   = $payload
+				logTotal = $Global:UM_LogCache.Count
+			}
+		}
+		
 		"/browse-folder" {
 
             Add-Type -AssemblyName System.Windows.Forms
@@ -285,50 +351,39 @@ while ($true) {
             }
         }
 
+		"/logs/total" {
+			try {
+				Update-LogCache
+				Send-Json $response @{ ok = $true; total = $Global:UM_LogCache.Count }
+			}
+			catch {
+				Send-Json $response @{ ok = $false; total = 0 }
+			}
+		}
+
 		"/logs/slice" {
 			try {
 				$start = [int]$request.QueryString["start"]
 				$end   = [int]$request.QueryString["end"]
 
-				if ($start -lt 0) { $start = 0 }
-				if ($end -lt $start) { $end = $start + 1 }
+				Update-LogCache
+				$total = $Global:UM_LogCache.Count
 
-				$path = $Global:UnifiedMachineLogPath
-				if (-not (Test-Path $path)) {
+				if ($total -eq 0) {
 					Send-Json $response @{ ok = $true; entries = @(); total = 0 }
 					continue
 				}
 
-				# Read entire file fresh
-				$raw = Get-Content -Path $path -Raw -ErrorAction SilentlyContinue
-				$lines = $raw -split "`n"
-
-				# Build array of ONLY valid JSON entries
-				$valid = @()
-				foreach ($line in $lines) {
-					$trim = $line.Trim()
-					if ($trim -eq "") { continue }
-
-					try {
-						$obj = $trim | ConvertFrom-Json
-						$valid += $obj
-					} catch {
-						# Skip invalid JSON lines
-					}
-				}
-
-				$total = $valid.Count
-
-				# Clamp slice bounds
-				if ($start -ge $total) { $start = $total - 1 }
 				if ($start -lt 0) { $start = 0 }
-
+				if ($start -ge $total) { $start = [Math]::Max(0, $total - 1) }
 				$end = [Math]::Min($end, $total)
 
-				# Extract slice
+				# Parse ONLY the requested slice from cached raw lines
 				$slice = @()
 				for ($i = $start; $i -lt $end; $i++) {
-					$slice += $valid[$i]
+					try {
+						$slice += $Global:UM_LogCache[$i] | ConvertFrom-Json
+					} catch {}
 				}
 
 				Send-Json $response @{
@@ -341,12 +396,50 @@ while ($true) {
 				Send-Json $response @{ ok = $false; error = $_.Exception.Message }
 			}
 		}
+
+		"/logs/search" {
+			try {
+				$query = $request.QueryString["q"]
+				$max   = if ($request.QueryString["max"]) { [int]$request.QueryString["max"] } else { 500 }
+
+				if (-not $query) {
+					Send-Json $response @{ ok = $true; entries = @(); total = 0 }
+					continue
+				}
+
+				Update-LogCache
+				$total = $Global:UM_LogCache.Count
+				$lowerQuery = $query.ToLower()
+				$matches = @()
+
+				foreach ($line in $Global:UM_LogCache) {
+					# Match against both raw JSON (escaped \\) and unescaped version
+					$lower = $line.ToLower().Replace("\\", "\")
+					if ($lower.Contains($lowerQuery) -or $line.ToLower().Contains($lowerQuery)) {
+						if ($matches.Count -lt $max) {
+							try { $matches += $line | ConvertFrom-Json } catch {}
+						}
+					}
+				}
+
+				Send-Json $response @{
+					ok      = $true
+					entries = $matches
+					total   = $total
+				}
+			}
+			catch {
+				Send-Json $response @{ ok = $false; error = $_.Exception.Message }
+			}
+		}
        
 		"/logs/clear" {
             try {
                 if (Test-Path $Global:UnifiedMachineLogPath) {
-                    "[]" | Set-Content -Path $Global:UnifiedMachineLogPath -Encoding UTF8
+                    "" | Set-Content -Path $Global:UnifiedMachineLogPath -Encoding UTF8
                 }
+                $Global:UM_LogCache.Clear()
+                $Global:UM_LogCacheSize = 0
                 Send-Json $response @{ ok = $true }
             }
             catch {

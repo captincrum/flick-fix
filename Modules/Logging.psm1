@@ -41,6 +41,18 @@ function UM-ReadUnifiedLog {
     return @($objects)
 }
 
+function UM-LogShowComplete {
+    param(
+        [string]$ShowPath,
+        [string]$Library
+    )
+    UM-AppendLogEntry ([ordered]@{
+        Type    = "ShowComplete"
+        Path    = $ShowPath
+        Library = $Library
+    })
+}
+
 # ----------------------[ Append Entry to Machine Log ]---------------------- #
 
 function UM-AppendLogEntry {
@@ -53,7 +65,7 @@ function UM-AppendLogEntry {
     $writeMutex = New-Object System.Threading.Mutex($false, "Global\UMLogWrite")
     try {
         $writeMutex.WaitOne() | Out-Null
-        Add-Content -Path $Global:UnifiedMachineLogPath -Value ($machineJson + "`n")
+        Add-Content -Path $Global:UnifiedMachineLogPath -Value $machineJson
     }
     finally {
         $writeMutex.ReleaseMutex()

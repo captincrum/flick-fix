@@ -1,11 +1,11 @@
 ﻿{
-    "RootPath":  "D:\\Shows\\Goosebumps",
+    "RootPath":  "D:\\Shows",
     "RepairedPath":  "F:\\",
-    "Mode":  "RepairOnly",
+    "Mode":  "ScanOnly",
     "ScanAllEpisodes":  true,
     "AccurateMode":  false,
     "CompressionOutputPath":  "F:\\",
     "CrfValue":  22,
     "Workers":  4,
-    "RunMode":  "RepairOnly"
+    "RunMode":  "ScanOnly"
 }

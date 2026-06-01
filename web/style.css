@@ -400,6 +400,13 @@ input[type="text"] {
     flex-shrink: 0;
 }
 
+.log-filter-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 /* ------------------------[ UI: Smart Compression options ]---------------------- */
 #smartOptions {
     max-height: 200px;

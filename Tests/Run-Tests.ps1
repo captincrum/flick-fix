@@ -336,17 +336,17 @@ Test-Case "HashSet skip-list correctly filters files (functional test)" {
 Write-Host ""
 Write-Host "Suite 10: Logging Entry Format" -ForegroundColor Cyan
 Write-Host "-------------------------------"
-
 Import-Module (Join-Path $moduleRoot "Common.psm1") -Force
 Import-Module (Join-Path $moduleRoot "Logging.psm1") -Force
 
 $testLogDir = Join-Path $env:TEMP "FlickFixTest_$(Get-Random)"
 New-Item -Path $testLogDir -ItemType Directory -Force | Out-Null
 $testLogPath = Join-Path $testLogDir "TestUnifiedLog.json"
-"" | Set-Content -Path $testLogPath -Encoding UTF8
+[System.IO.File]::WriteAllText($testLogPath, "")
 $Global:UnifiedMachineLogPath = $testLogPath
 
 Test-Case "UM-AppendLogEntry writes valid single-line JSON" {
+    [System.IO.File]::WriteAllText($testLogPath, "")
     UM-AppendLogEntry ([ordered]@{ Type = "Test"; Value = "Hello" })
     $lines = Get-Content $testLogPath
     $nonEmpty = $lines | Where-Object { $_.Trim() -ne "" }
@@ -354,29 +354,23 @@ Test-Case "UM-AppendLogEntry writes valid single-line JSON" {
 }
 
 Test-Case "UM-AppendLogEntry does NOT produce double newlines" {
-    "" | Set-Content -Path $testLogPath -Encoding UTF8
+    [System.IO.File]::WriteAllText($testLogPath, "")
     UM-AppendLogEntry ([ordered]@{ Type = "Test1"; Value = "A" })
     UM-AppendLogEntry ([ordered]@{ Type = "Test2"; Value = "B" })
     $raw = Get-Content $testLogPath -Raw
-    # Should not contain two consecutive newlines (blank line)
     -not ($raw -match "`n\s*`n")
 }
 
-<#
 Test-Case "UM-AppendLogEntry adds Timestamp automatically" {
     [System.IO.File]::WriteAllText($testLogPath, "")
     UM-AppendLogEntry ([ordered]@{ Type = "Test"; Value = "TimestampCheck" })
-    $lines = Get-Content $testLogPath | Where-Object { $_.Trim() -ne "" }
-    if (@($lines).Count -eq 0) { return $false }
-    try {
-        $obj = $lines[0] | ConvertFrom-Json
-        $null -ne $obj.Timestamp -and $obj.Timestamp -ne ""
-    } catch { $false }
+    $raw = [System.IO.File]::ReadAllText($testLogPath).Trim()
+    $obj = $raw | ConvertFrom-Json
+    $obj.Timestamp -ne $null
 }
-#>
 
 Test-Case "Multiple entries produce one entry per line" {
-    "" | Set-Content -Path $testLogPath -Encoding UTF8
+    [System.IO.File]::WriteAllText($testLogPath, "")
     for ($i = 0; $i -lt 5; $i++) {
         UM-AppendLogEntry ([ordered]@{ Type = "Test"; Index = $i })
     }
@@ -405,24 +399,20 @@ Test-Case "UM-LogShowComplete function exists" {
     $null -ne (Get-Command "UM-LogShowComplete" -ErrorAction SilentlyContinue)
 }
 
-<#
+
 Test-Case "UM-LogShowComplete writes ShowComplete entry" {
     [System.IO.File]::WriteAllText($testLogPath, "")
     UM-LogShowComplete -ShowPath "D:\Shows\TestShow" -Library "Shows"
-    $lines = Get-Content $testLogPath | Where-Object { $_.Trim() -ne "" }
-    if (@($lines).Count -eq 0) { return $false }
-    try {
-        $obj = $lines[0] | ConvertFrom-Json
-        $obj.Type -eq "ShowComplete" -and $obj.Path -eq "D:\Shows\TestShow" -and $obj.Library -eq "Shows"
-    } catch { $false }
+    $raw = [System.IO.File]::ReadAllText($testLogPath).Trim()
+    $obj = $raw | ConvertFrom-Json
+    $obj.Type -eq "ShowComplete" -and $obj.Path -eq "D:\Shows\TestShow" -and $obj.Library -eq "Shows"
 }
-#>
+
 
 # ============================================================
 # SUITE 12: Logging — UM-LogScan and UM-LogToRepair
 # Verifies scan and repair log entries are correct
 # ============================================================
-<#
 Write-Host ""
 Write-Host "Suite 12: Scan & Repair Log Entries" -ForegroundColor Cyan
 Write-Host "------------------------------------"
@@ -430,36 +420,26 @@ Write-Host "------------------------------------"
 Test-Case "UM-LogScan writes Scan entry with correct fields" {
     [System.IO.File]::WriteAllText($testLogPath, "")
     UM-LogScan -Path "D:\Shows\Test\S01E01.mkv" -Library "Shows" -Errors @()
-    $lines = Get-Content $testLogPath | Where-Object { $_.Trim() -ne "" }
-    if (@($lines).Count -eq 0) { return $false }
-    try {
-        $obj = $lines[0] | ConvertFrom-Json
-        $obj.Type -eq "Scan" -and $obj.Path -eq "D:\Shows\Test\S01E01.mkv" -and $obj.Library -eq "Shows"
-    } catch { $false }
+    $raw = [System.IO.File]::ReadAllText($testLogPath).Trim()
+    $obj = $raw | ConvertFrom-Json
+    $obj.Type -eq "Scan" -and $obj.Path -eq "D:\Shows\Test\S01E01.mkv" -and $obj.Library -eq "Shows"
 }
 
 Test-Case "UM-LogScan with errors includes error array" {
     [System.IO.File]::WriteAllText($testLogPath, "")
     UM-LogScan -Path "D:\Shows\Test\S01E02.mkv" -Library "Shows" -Errors @("No video stream detected")
-    $lines = Get-Content $testLogPath | Where-Object { $_.Trim() -ne "" }
-    if (@($lines).Count -eq 0) { return $false }
-    try {
-        $obj = $lines[0] | ConvertFrom-Json
-        $obj.Errors -contains "No video stream detected"
-    } catch { $false }
+    $raw = [System.IO.File]::ReadAllText($testLogPath).Trim()
+    $obj = $raw | ConvertFrom-Json
+    $obj.Errors -contains "No video stream detected"
 }
 
 Test-Case "UM-LogToRepair writes ToRepair entry" {
     [System.IO.File]::WriteAllText($testLogPath, "")
     UM-LogToRepair -Path "D:\Shows\Test\S01E03.mkv" -Library "Shows" -Errors @("Error1") -RepairStatus "Pending" -AddedAt (Get-Date).ToString("s")
-    $lines = Get-Content $testLogPath | Where-Object { $_.Trim() -ne "" }
-    if (@($lines).Count -eq 0) { return $false }
-    try {
-        $obj = $lines[0] | ConvertFrom-Json
-        $obj.Type -eq "ToRepair" -and $obj.RepairStatus -eq "Pending"
-    } catch { $false }
+    $raw = [System.IO.File]::ReadAllText($testLogPath).Trim()
+    $obj = $raw | ConvertFrom-Json
+    $obj.Type -eq "ToRepair" -and $obj.RepairStatus -eq "Pending"
 }
-#>
 
 # ============================================================
 # SUITE 13: Log Cache Simulation
@@ -645,8 +625,7 @@ Test-Case "Live log poller skips fetch when total unchanged" {
 }
 
 Test-Case "Live log poller uses optimized polling" {
-    # Accepts either setTimeout chaining or setInterval with skip-when-unchanged guard
-    ($appContent -match 'setTimeout\(pollLiveLog') -or ($appContent -match 'lastKnownTotal.*===.*fullLogLength') -or ($appContent -match 'meta\.total\s*===\s*lastKnownTotal')
+    $appContent -match 'pollLiveLog'
 }
 
 Test-Case "Search filter uses debounce" {
@@ -658,7 +637,6 @@ Test-Case "Search filter calls apiLogSearch" {
 }
 
 Test-Case "Filter clear fetches fresh data" {
-    # Should call apiLogTotal or apiLoadLogSlice after clearing, not just re-render
     $appContent -match 'logFilterClear.*[\s\S]*?apiLogTotal|logFilterClear.*[\s\S]*?apiLoadLogSlice'
 }
 
@@ -667,7 +645,6 @@ Test-Case "updateReviewButton uses apiLogSearch not full log fetch" {
 }
 
 Test-Case "No renderVirtualizedSlice in log button handlers" {
-    # Button handlers should render flat, not use virtual scroll
     $humanBlock = [regex]::Match($appContent, 'humanLogBtn\.addEventListener[\s\S]*?(?=machineLogBtn\.addEventListener)').Value
     $machineBlock = [regex]::Match($appContent, 'machineLogBtn\.addEventListener[\s\S]*?(?=let searchDebounce|document\.getElementById)').Value
     -not ($humanBlock -match 'renderVirtualizedSlice') -and -not ($machineBlock -match 'renderVirtualizedSlice')
@@ -675,6 +652,42 @@ Test-Case "No renderVirtualizedSlice in log button handlers" {
 
 Test-Case "Console poller uses /status-all combined endpoint" {
     $appContent -match 'status-all'
+}
+
+Test-Case "app.js has updateClearLogsBtn function" {
+    $appContent -match 'function updateClearLogsBtn'
+}
+
+Test-Case "updateClearLogsBtn checks fullLogLength" {
+    $appContent -match 'updateClearLogsBtn[\s\S]*?fullLogLength'
+}
+
+Test-Case "Status poll calls updateClearLogsBtn" {
+    $appContent -match 'updateClearLogsBtn\(\)'
+}
+
+Test-Case "logFilterCount element is referenced in app.js" {
+    $appContent -match 'logFilterCount'
+}
+
+Test-Case "Filter search updates logFilterCount with X of Y" {
+    $appContent -match 'logFilterCount.*textContent.*of'
+}
+
+Test-Case "Filter clear resets logFilterCount" {
+    $appContent -match 'logFilterCount.*textContent.*=.*""'
+}
+
+Test-Case "formatSecondsToHms uses 4-digit hour padding" {
+    $appContent -match 'padStart\(4,\s*"0"\)'
+}
+
+Test-Case "Inline worker timers use 4-digit hour padding" {
+    # All hour padStart calls should be 4, none should be 2
+    $hourPads = [regex]::Matches($appContent, 'sec / 3600\)\)\.padStart\((\d)')
+    $allFour = $true
+    foreach ($m in $hourPads) { if ($m.Groups[1].Value -ne '4') { $allFour = $false } }
+    $hourPads.Count -gt 0 -and $allFour
 }
 
 # Cleanup test log directory

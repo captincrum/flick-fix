@@ -35,6 +35,17 @@ let windowEnd = 200;
 
 let resumeShouldBeVisible = false;
 
+/* ------------------------[       Clear Logs button state      ]------------------------ */
+
+function updateClearLogsBtn() {
+    const btn = document.getElementById("clearLogsBtn");
+    const isRunning = document.getElementById("startBtn").disabled;
+    const hasLogs = fullLogLength > 0 || currentEntries.length > 0;
+    const shouldDisable = isRunning || !hasLogs;
+    btn.disabled = shouldDisable;
+    btn.classList.toggle("disabled-ui", shouldDisable);
+}
+
 /* ------------------------[        Core UI state helpers       ]------------------------ */
 
 function setUIRunningState(isRunning) {
@@ -44,7 +55,6 @@ function setUIRunningState(isRunning) {
     const browseRepaired = document.getElementById("browseRepaired");
     const scanAll        = document.getElementById("scanAllEpisodes");
     const modeRadios     = document.querySelectorAll("input[name='mode']");
-    const clearLogsBtn   = document.getElementById("clearLogsBtn");
     const startBtn       = document.getElementById("startBtn");
     const cancelBtn      = document.getElementById("cancelBtn");
 
@@ -62,7 +72,6 @@ function setUIRunningState(isRunning) {
         document.getElementById("scanAllEpisodes").disabled = true;
         document.querySelector("#accurateMode").closest(".toggle-row").classList.add("disabled-ui");
         document.querySelector("#scanAllEpisodes").closest(".toggle-row").classList.add("disabled-ui");		
-        clearLogsBtn.disabled   = true;
         startBtn.disabled       = true;
         cancelBtn.disabled      = false;
         modeRadios.forEach(r => (r.disabled = true));
@@ -72,7 +81,6 @@ function setUIRunningState(isRunning) {
         browseRoot.classList.add("disabled-ui");
         browseRepaired.classList.add("disabled-ui");
         scanAll.classList.add("disabled-ui");
-        clearLogsBtn.classList.add("disabled-ui");
         startBtn.classList.add("disabled-ui");
         cancelBtn.classList.remove("disabled-ui");
         modeRadios.forEach(r => r.classList.add("disabled-ui"));
@@ -90,7 +98,6 @@ function setUIRunningState(isRunning) {
         document.getElementById("scanAllEpisodes").disabled = false;
         document.querySelector("#accurateMode").closest(".toggle-row").classList.remove("disabled-ui");
         document.querySelector("#scanAllEpisodes").closest(".toggle-row").classList.remove("disabled-ui");		
-        clearLogsBtn.disabled   = false;
         startBtn.disabled       = false;
         cancelBtn.disabled      = true;
         modeRadios.forEach(r => (r.disabled = false));
@@ -100,7 +107,6 @@ function setUIRunningState(isRunning) {
         browseRoot.classList.remove("disabled-ui");
         browseRepaired.classList.remove("disabled-ui");
         scanAll.classList.remove("disabled-ui");
-        clearLogsBtn.classList.remove("disabled-ui");
         startBtn.classList.remove("disabled-ui");
         cancelBtn.classList.add("disabled-ui");
         modeRadios.forEach(r => r.classList.remove("disabled-ui"));
@@ -173,7 +179,7 @@ function formatSecondsToHms(totalSeconds) {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(h).padStart(4, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 /* ------------------------[          Log rendering helpers     ]------------------------ */
@@ -327,10 +333,10 @@ function renderCompressConsole(s) {
             workerLines += `${workerLabel} : ${w || "Waiting..."}\n\n`;
             continue;
         }
-        let fileElapsed = "00:00:00";
+        let fileElapsed = "0000:00:00";
         if (w.FileStart) {
             const sec = Math.floor((Date.now() - Date.parse(w.FileStart)) / 1000);
-            const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
+            const hh = String(Math.floor(sec / 3600)).padStart(4, "0");
             const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
             const ss = String(sec % 60).padStart(2, "0");
             fileElapsed = `${hh}:${mm}:${ss}`;
@@ -365,7 +371,7 @@ function renderCompressConsole(s) {
     block += "----------------------------------------\n";
     block += "Phase 3    : Compressing Files\n";
     block += `Mode       : Smart Compression\n`;
-    block += `Elapsed    : ${s.Elapsed || "00:00:00"}\n`;
+    block += `Elapsed    : ${s.Elapsed || "0000:00:00"}\n`;
     block += `Compressed : ${s.ItemIndex} / ${s.TotalItems}\n`;
     block += `Completion : ${pct}%\n`;
     block += `CRF        : ${s.CRF}\n`;
@@ -394,19 +400,19 @@ function renderRepairConsole() {
             continue;
         }
 
-        let fileElapsed = "00:00:00";
+        let fileElapsed = "0000:00:00";
         if (w.FileStart) {
             const sec = Math.floor((Date.now() - Date.parse(w.FileStart)) / 1000);
-            const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
+            const hh = String(Math.floor(sec / 3600)).padStart(4, "0");
             const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
             const ss = String(sec % 60).padStart(2, "0");
             fileElapsed = `${hh}:${mm}:${ss}`;
         }
 
-        let attemptElapsed = "00:00:00";
+        let attemptElapsed = "0000:00:00";
         if (w.AttemptStart) {
             const sec = Math.floor((Date.now() - Date.parse(w.AttemptStart)) / 1000);
-            const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
+            const hh = String(Math.floor(sec / 3600)).padStart(4, "0");
             const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
             const ss = String(sec % 60).padStart(2, "0");
             attemptElapsed = `${hh}:${mm}:${ss}`;
@@ -424,7 +430,7 @@ function renderRepairConsole() {
     block += "----------------------------------------\n";
     block += "Phase 3          : Repairing & Logging\n";
     block += `Mode             : ${s.Mode || "Repair"}\n`;
-    block += `Elapsed Time     : ${s.Elapsed || "00:00:00"}\n`;
+    block += `Elapsed Time     : ${s.Elapsed || "0000:00:00"}\n`;
     block += `Repaired         : ${s.ItemIndex} / ${s.TotalItems}\n`;
     block += `Completion       : ${pct}%\n`;
     block += "----------------------------------------\n";
@@ -479,10 +485,10 @@ function renderStatusBlock(data) {
 			}
 
 			const sample = (w.Sample != null && w.TotalSamples != null) ? `${w.Sample}/${w.TotalSamples}` : "--";
-			let sampleElapsed = "00:00:00";
+			let sampleElapsed = "0000:00:00";
 			if (w.SampleStart) {
 				const sec = Math.floor((Date.now() - Date.parse(w.SampleStart)) / 1000);
-				const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
+				const hh = String(Math.floor(sec / 3600)).padStart(4, "0");
 				const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
 				const ss = String(sec % 60).padStart(2, "0");
 				sampleElapsed = `${hh}:${mm}:${ss}`;
@@ -596,6 +602,7 @@ async function clearLogs() {
                 windowEnd      = 200;
                 currentEntries = [];
                 renderLogFile([]);
+                updateClearLogsBtn();
             } else {
                 alert("Failed to clear logs: " + data.error);
             }
@@ -764,7 +771,10 @@ function toggleLogPane() {
 
 /* ------------------------[        Event wiring: lifecycle     ]------------------------ */
 
-window.addEventListener("DOMContentLoaded", loadConfig);
+window.addEventListener("DOMContentLoaded", () => {
+    loadConfig();
+    updateClearLogsBtn();
+});
 
 document.querySelectorAll("input[name='mode']").forEach(radio => {
     radio.addEventListener("change", () => {
@@ -914,6 +924,7 @@ document.getElementById("logFilterInput").addEventListener("input", () => {
 
     if (searchDebounce) clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
+        const countEl = document.getElementById("logFilterCount");
         if (logFilterText) {
             const data = await apiLogSearch(logFilterText, 500);
             currentEntries = data.entries || [];
@@ -921,7 +932,9 @@ document.getElementById("logFilterInput").addEventListener("input", () => {
             logSpacer.style.height = "0px";
             logContent.style.top   = "0px";
             renderLogFile(currentEntries);
+            countEl.textContent = `${currentEntries.length} of ${fullLogLength}`;
         } else {
+            countEl.textContent = "";
             logAutoScroll = true;
             scrollLocked  = false;
             const meta = await apiLogTotal();
@@ -938,6 +951,7 @@ document.getElementById("logFilterInput").addEventListener("input", () => {
 
 document.getElementById("logFilterClear").addEventListener("click", async () => {
     document.getElementById("logFilterInput").value = "";
+    document.getElementById("logFilterCount").textContent = "";
     logFilterText = "";
     logAutoScroll = true;
     scrollLocked  = false;
@@ -1791,6 +1805,7 @@ setInterval(async () => {
 
     setUIRunningState(status.status === "running");
     applyModeRules();
+    updateClearLogsBtn();
 
 	if (status.status === "completed" &&
             document.querySelector("input[name='mode']:checked")?.value === "SmartCompression" &&
@@ -1829,8 +1844,26 @@ let logPollTimer = null;
 let logPollBusy = false;
 
 async function pollLiveLog() {
-    if (!logOpen || isScrollFetching || scrollLocked || logFilterText || logPollBusy) {
+    if (!logOpen || isScrollFetching || scrollLocked || logPollBusy) {
         logPollTimer = setTimeout(pollLiveLog, 250);
+        return;
+    }
+
+    if (logFilterText) {
+        logPollBusy = true;
+        const meta = await apiLogTotal();
+        if (meta.ok && meta.total !== lastKnownTotal) {
+            lastKnownTotal = meta.total;
+            const data = await apiLogSearch(logFilterText, 500);
+            currentEntries = data.entries || [];
+            fullLogLength = data.total || 0;
+            logSpacer.style.height = "0px";
+            logContent.style.top   = "0px";
+            renderLogFile(currentEntries);
+            document.getElementById("logFilterCount").textContent = `${currentEntries.length} of ${fullLogLength}`;
+        }
+        logPollBusy = false;
+        logPollTimer = setTimeout(pollLiveLog, 1000);
         return;
     }
 

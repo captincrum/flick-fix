@@ -567,24 +567,51 @@ test.describe('Log Panel', () => {
         await expect(page.locator('#logFilterInput')).toHaveValue('');
     });
 
-    test('Clear Logs button shows confirm modal', async ({ page }) => {
+	test('Clear Logs button shows confirm modal', async ({ page }) => {
         await page.locator('#humanLogBtn').click();
-        await page.locator('#clearLogsBtn').click();
+        await page.evaluate(() => {
+            const btn = document.getElementById('clearLogsBtn');
+            btn.disabled = false;
+            btn.click();
+        });
         await expect(page.locator('#confirmModal')).toBeVisible();
     });
 
     test('Confirm modal Cancel button closes it', async ({ page }) => {
         await page.locator('#humanLogBtn').click();
-        await page.locator('#clearLogsBtn').click();
+        await page.evaluate(() => {
+            const btn = document.getElementById('clearLogsBtn');
+            btn.disabled = false;
+            btn.click();
+        });
         await page.locator('#confirmNo').click();
         await expect(page.locator('#confirmModal')).toHaveClass(/hidden/);
     });
 
     test('Confirm modal OK button closes it', async ({ page }) => {
         await page.locator('#humanLogBtn').click();
-        await page.locator('#clearLogsBtn').click();
+        await page.evaluate(() => {
+            const btn = document.getElementById('clearLogsBtn');
+            btn.disabled = false;
+            btn.click();
+        });
         await page.locator('#confirmYes').click();
         await expect(page.locator('#confirmModal')).toHaveClass(/hidden/);
+    });
+	
+	test('Clear Logs button is disabled after clearing logs', async ({ page }) => {
+        await page.request.get(`${BASE_URL}/logs/clear`);
+        await page.goto(BASE_URL);
+        // Wait for the polling cycle to update button state
+        await page.waitForTimeout(1500);
+        await expect(page.locator('#clearLogsBtn')).toBeDisabled();
+    });
+
+    test('Clear Logs button has disabled-ui class when no logs exist', async ({ page }) => {
+        await page.request.get(`${BASE_URL}/logs/clear`);
+        await page.goto(BASE_URL);
+        await page.waitForTimeout(1500);
+        await expect(page.locator('#clearLogsBtn')).toHaveClass(/disabled-ui/);
     });
 
 });
@@ -789,6 +816,45 @@ test.describe('Search Filter', () => {
         // Should not throw — page should still be responsive
         await expect(page.locator('#logFilterInput')).toBeVisible();
     });
+	
+	test('Filter count element exists in DOM', async ({ page }) => {
+        await page.locator('#machineLogBtn').click();
+        await expect(page.locator('#logFilterCount')).toBeAttached();
+    });
+
+    test('Filter count is empty when no filter is active', async ({ page }) => {
+        await page.locator('#machineLogBtn').click();
+        await expect(page.locator('#logFilterCount')).toHaveText('');
+    });
+
+    test('Filter count shows "X of Y" when filter is active', async ({ page }) => {
+        await page.locator('#machineLogBtn').click();
+        await page.locator('#logFilterInput').fill('a');
+        await page.locator('#logFilterInput').dispatchEvent('input');
+        await page.waitForTimeout(500);
+        const text = await page.locator('#logFilterCount').textContent();
+        expect(text).toMatch(/^\d+ of \d+$/);
+    });
+
+    test('Filter count clears when clear button is clicked', async ({ page }) => {
+        await page.locator('#machineLogBtn').click();
+        await page.locator('#logFilterInput').fill('a');
+        await page.locator('#logFilterInput').dispatchEvent('input');
+        await page.waitForTimeout(500);
+        await page.locator('#logFilterClear').click();
+        await expect(page.locator('#logFilterCount')).toHaveText('');
+    });
+
+    test('Filter count clears when input is manually emptied', async ({ page }) => {
+        await page.locator('#machineLogBtn').click();
+        await page.locator('#logFilterInput').fill('a');
+        await page.locator('#logFilterInput').dispatchEvent('input');
+        await page.waitForTimeout(500);
+        await page.locator('#logFilterInput').fill('');
+        await page.locator('#logFilterInput').dispatchEvent('input');
+        await page.waitForTimeout(500);
+        await expect(page.locator('#logFilterCount')).toHaveText('');
+    });
 
 });
 
@@ -933,6 +999,41 @@ test.describe('Log Data Round-Trip', () => {
         const allJson = await allRes.json();
         const totalJson = await totalRes.json();
         expect(allJson.logTotal).toBe(totalJson.total);
+    });
+
+});
+
+// ================================================================
+// SUITE 16: Timer Formatting
+// Verifies elapsed time formatting handles large values
+// ================================================================
+test.describe('Timer Formatting', () => {
+
+    test.beforeEach(async ({ page }) => { await resetConfig(page); });
+
+    test('formatSecondsToHms produces 4-digit hours for 0 seconds', async ({ page }) => {
+        const result = await page.evaluate(() => formatSecondsToHms(0));
+        expect(result).toBe('0000:00:00');
+    });
+
+    test('formatSecondsToHms produces 4-digit hours for 90 seconds', async ({ page }) => {
+        const result = await page.evaluate(() => formatSecondsToHms(90));
+        expect(result).toBe('0000:01:30');
+    });
+
+    test('formatSecondsToHms handles 1000+ hours', async ({ page }) => {
+        const result = await page.evaluate(() => formatSecondsToHms(3600000));
+        expect(result).toBe('1000:00:00');
+    });
+
+    test('formatSecondsToHms handles 9999 hours', async ({ page }) => {
+        const result = await page.evaluate(() => formatSecondsToHms(35996400));
+        expect(result).toBe('9999:00:00');
+    });
+
+    test('formatSecondsToHms handles negative input gracefully', async ({ page }) => {
+        const result = await page.evaluate(() => formatSecondsToHms(-50));
+        expect(result).toBe('0000:00:00');
     });
 
 });

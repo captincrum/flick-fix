@@ -1080,23 +1080,19 @@ test.describe('GPU Encoding Toggle', () => {
         expect(json.config).toHaveProperty('UseGPU');
     });
 
-    test('GPU status text resolves after detection', async ({ page }) => {
-    await waitForDetection(page);
-    const text = (await page.locator('#gpuStatusDesc').textContent()).trim();
-    // CPU selected: empty string; GPU selected: "NVIDIA detected" etc.
-    expect(text === '' || text.includes('detected')).toBe(true);
-	});
-
 	// Skip ALL GPU‑dependent tests in CI (GitHub Actions has no GPU)
 	test.skip(process.env.CI, 'Skipping GPU tests in CI: no GPU available');
 
-	test('GPU status text resolves after detection', async ({ page }) => {
+	// GPU status text test
+	test('GPU status text resolves after detection (GPU Encoding Toggle)', async ({ page }) => {
 	  await waitForDetection(page);
 	  const text = (await page.locator('#gpuStatusDesc').textContent()).trim();
+	  // CPU selected: empty string; GPU selected: "NVIDIA detected" etc.
 	  expect(text === '' || text.includes('detected')).toBe(true);
 	});
 
-	test('GPU toggle enabled state matches detection result', async ({ page }) => {
+	// GPU toggle test
+	test('GPU toggle enabled state matches detection result (GPU Encoding Toggle)', async ({ page }) => {
 	  await waitForDetection(page);
 	  const status = await page.locator('#gpuStatusDesc').textContent();
 

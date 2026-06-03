@@ -1360,6 +1360,15 @@ function savedClass(pct) {
     return "saved-low";
 }
 
+function restripeTree(tbody) {
+    let visibleIdx = 0;
+    for (const tr of tbody.querySelectorAll("tr")) {
+        if (tr.style.display === "none") continue;
+        tr.classList.toggle("tree-stripe", visibleIdx % 2 === 1);
+        visibleIdx++;
+    }
+}
+
 function renderTree(node, level, tbody, parentCheckbox) {
     const isLeaf   = node.children === null;
     const children = isLeaf ? [] : Object.values(node.children);
@@ -1369,7 +1378,6 @@ function renderTree(node, level, tbody, parentCheckbox) {
 
     // Dim skipped leaf rows
 	if (isLeaf && node.verdict === "Skip") {
-		tr.style.opacity = "0.45";
 		tr.style.pointerEvents = "none";
 	}
 
@@ -1457,6 +1465,12 @@ function renderTree(node, level, tbody, parentCheckbox) {
     }
     tr.appendChild(tdVerdict);
 
+	if (isLeaf && node.verdict === "Skip") {
+			name.style.opacity = "0.45";
+			tdSize.style.opacity = "0.45";
+			tdVerdict.style.opacity = "0.45";
+	}
+		
     if (node.path) tr.dataset.path = node.path;
     tbody.appendChild(tr);
 
@@ -1572,6 +1586,7 @@ function toggleChildren(tbody, parentIdx, parentLevel, show) {
         }
     }
     if (show) syncParentCheckboxes(tbody);
+	restripeTree(tbody);
 }
 
 // Sets children checked state - "smart" mode checks only Compress verdicts, skips disabled

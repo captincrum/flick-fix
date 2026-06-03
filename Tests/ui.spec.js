@@ -679,6 +679,47 @@ test.describe('Compression Modal Structure', () => {
         await expect(page.locator('#compressionStart')).toBeAttached();
     });
 
+	test('Tree striping alternates over visible rows and skips hidden rows', async ({ page }) => {
+        const result = await page.evaluate(() => {
+            const tbody = document.createElement('tbody');
+            const spec = [
+                { name: 'All Media', hidden: false },  // visible 0 -> dark
+                { name: 'Movies',    hidden: false },  // visible 1 -> light
+                { name: 'HiddenA',   hidden: true  },  // collapsed - skipped
+                { name: 'HiddenB',   hidden: true  },  // collapsed - skipped
+                { name: 'Shows',     hidden: false },  // visible 2 -> dark
+                { name: 'A Show',    hidden: false },  // visible 3 -> light
+            ];
+            for (const r of spec) {
+                const tr = document.createElement('tr');
+                tr.dataset.name = r.name;
+                if (r.hidden) tr.style.display = 'none';
+                tbody.appendChild(tr);
+            }
+            restripeTree(tbody);
+            return [...tbody.querySelectorAll('tr')].map(tr => ({
+                name:    tr.dataset.name,
+                hidden:  tr.style.display === 'none',
+                striped: tr.classList.contains('tree-stripe'),
+            }));
+        });
+
+        // Hidden rows are never striped
+        expect(result.filter(r => r.hidden).every(r => !r.striped)).toBe(true);
+
+        // Visible rows alternate dark/light (0-indexed: odd = striped/light)
+        result.filter(r => !r.hidden).forEach((r, i) => {
+            expect(r.striped).toBe(i % 2 === 1);
+        });
+
+        // Hidden rows between Movies and Shows must NOT shift the pattern
+        const byName = Object.fromEntries(result.map(r => [r.name, r.striped]));
+        expect(byName['All Media']).toBe(false); // dark
+        expect(byName['Movies']).toBe(true);     // light
+        expect(byName['Shows']).toBe(false);     // dark
+        expect(byName['A Show']).toBe(true);     // light
+    });
+	
 });
 
 // ================================================================

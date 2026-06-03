@@ -671,7 +671,7 @@ input[type="text"] {
     min-height: 400px;
 }
 
-.compression-tree tbody tr:nth-child(even) {
+.compression-tree tbody tr.tree-stripe {
     background: rgba(255, 255, 255, 0.02);
 }
 

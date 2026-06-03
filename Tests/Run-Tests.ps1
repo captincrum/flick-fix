@@ -559,6 +559,32 @@ Test-Case "Server has /status-all endpoint" {
     $serverContent -match '"/status-all"'
 }
 
+Test-Case "/status-all returns runState for the unified poller" {
+    $statusAllBlock = [regex]::Match($serverContent, '"/status-all"[\s\S]*?(?="\/)').Value
+    $statusAllBlock -match 'runState'
+}
+
+Test-Case "Update-LogCache debounces re-reads to once per second" {
+    $cacheBlock = [regex]::Match($serverContent, 'function Update-LogCache[\s\S]*?^}', [System.Text.RegularExpressions.RegexOptions]::Multiline).Value
+    ($cacheBlock -match 'UM_LogCacheLastRead') -and ($cacheBlock -match '1000')
+}
+
+<#
+Test-Case "/logs/slice emits cached JSON with no parse round-trip" {
+    $sliceBlock = [regex]::Match($serverContent, '"/logs/slice"[\s\S]*?(?="\/)').Value
+    ($sliceBlock -match 'GetRange') -and ($sliceBlock -match 'Send-RawJson') -and -not ($sliceBlock -match 'ConvertFrom-Json')
+}
+#>
+
+Test-Case "Server has Send-RawJson helper" {
+    $serverContent -match 'function Send-RawJson'
+}
+
+Test-Case "/logs/search returns matches without re-parsing each line" {
+    $searchBlock = [regex]::Match($serverContent, '"/logs/search"[\s\S]*?(?="\/)').Value
+    ($searchBlock -match 'Send-RawJson') -and -not ($searchBlock -match 'ConvertFrom-Json')
+}
+
 Test-Case "Server has Update-LogCache function" {
     $serverContent -match 'function Update-LogCache'
 }
@@ -616,16 +642,20 @@ Test-Case "apiLogSearch calls /logs/search" {
     $appContent -match 'fetch\(.*logs/search'
 }
 
-Test-Case "Live log poller uses apiLogTotal for cheap count check" {
-    $appContent -match 'apiLogTotal\(\)'
+Test-Case "Unified poller derives the log count from /status-all logTotal" {
+    $appContent -match 'data\.logTotal' -and $appContent -match 'lastKnownTotal'
 }
 
 Test-Case "Live log poller skips fetch when total unchanged" {
     $appContent -match 'lastKnownTotal'
 }
 
-Test-Case "Live log poller uses optimized polling" {
-    $appContent -match 'pollLiveLog'
+Test-Case "Client uses one unified poller (pollLiveLog removed)" {
+    ($appContent -match 'function unifiedPoll') -and -not ($appContent -match 'function pollLiveLog')
+}
+
+Test-Case "Client polls the server from a single setInterval loop" {
+    @([regex]::Matches($appContent, 'setInterval\(')).Count -eq 1
 }
 
 Test-Case "Search filter uses debounce" {

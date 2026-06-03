@@ -44,6 +44,14 @@ function Send-Json {
     $response.OutputStream.Write($bytes, 0, $bytes.Length)
 }
 
+function Send-RawJson {
+    param($response, [string]$json)
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $response.ContentType = "application/json"
+    $response.OutputStream.Write($bytes, 0, $bytes.Length)
+}
+
 function Send-File {
     param($response, $path, $contentType)
 
@@ -63,6 +71,14 @@ function Send-File {
 # -------------------------[ Log Cache ]----------------------------------- #
 
 function Update-LogCache {
+    # Debounce: never re-read the file more than once per second, regardless
+    # of how many requests arrive in between.
+    $now = [datetime]::UtcNow
+    if (($now - $Global:UM_LogCacheLastRead).TotalMilliseconds -lt 1000) {
+        return
+    }
+    $Global:UM_LogCacheLastRead = $now
+
     $path = $Global:UnifiedMachineLogPath
     if (-not $path -or -not (Test-Path $path)) {
         return
@@ -119,6 +135,7 @@ $Global:UM_Job                = $null
 # Log cache — avoids re-reading the entire file on every request
 $Global:UM_LogCache           = [System.Collections.Generic.List[string]]::new()
 $Global:UM_LogCacheSize       = 0
+$Global:UM_LogCacheLastRead   = [datetime]::MinValue
 
 # -------------------------[ Start Pipeline ]------------------------------- #
 
@@ -302,6 +319,7 @@ while ($true) {
 			}
 			Send-Json $response @{
 				status   = $payload
+				runState = $Global:UM_Status
 				logTotal = $Global:UM_LogCache.Count
 			}
 		}
@@ -374,69 +392,60 @@ while ($true) {
 				$total = $Global:UM_LogCache.Count
 
 				if ($total -eq 0) {
-					Send-Json $response @{ ok = $true; entries = @(); total = 0 }
+					Send-RawJson $response '{"ok":true,"entries":[],"total":0}'
 					continue
 				}
 
 				if ($start -lt 0) { $start = 0 }
 				if ($start -ge $total) { $start = [Math]::Max(0, $total - 1) }
 				$end = [Math]::Min($end, $total)
+				$count = $end - $start
+				if ($count -lt 0) { $count = 0 }
 
-				# Parse ONLY the requested slice from cached raw lines
-				$slice = @()
-				for ($i = $start; $i -lt $end; $i++) {
-					try {
-						$slice += $Global:UM_LogCache[$i] | ConvertFrom-Json
-					} catch {}
-				}
+				# Cache lines are already valid single-line JSON. Stitch them into a
+				# JSON array and send as-is — no ConvertFrom-Json / ConvertTo-Json.
+				$rawLines = $Global:UM_LogCache.GetRange($start, $count)
+				$entriesJson = "[" + ($rawLines -join ",") + "]"
 
-				Send-Json $response @{
-					ok      = $true
-					entries = $slice
-					total   = $total
-				}
+				Send-RawJson $response ('{"ok":true,"entries":' + $entriesJson + ',"total":' + $total + '}')
 			}
 			catch {
 				Send-Json $response @{ ok = $false; error = $_.Exception.Message }
 			}
 		}
-
+		
 		"/logs/search" {
 			try {
 				$query = $request.QueryString["q"]
 				$max   = if ($request.QueryString["max"]) { [int]$request.QueryString["max"] } else { 500 }
 
 				if (-not $query) {
-					Send-Json $response @{ ok = $true; entries = @(); total = 0 }
+					Send-RawJson $response '{"ok":true,"entries":[],"total":0}'
 					continue
 				}
 
 				Update-LogCache
 				$total = $Global:UM_LogCache.Count
 				$lowerQuery = $query.ToLower()
-				$matches = @()
 
+				$matched = [System.Collections.Generic.List[string]]::new()
 				foreach ($line in $Global:UM_LogCache) {
-					# Match against both raw JSON (escaped \\) and unescaped version
+					if ($matched.Count -ge $max) { break }
 					$lower = $line.ToLower().Replace("\\", "\")
 					if ($lower.Contains($lowerQuery) -or $line.ToLower().Contains($lowerQuery)) {
-						if ($matches.Count -lt $max) {
-							try { $matches += $line | ConvertFrom-Json } catch {}
-						}
+						$matched.Add($line)
 					}
 				}
 
-				Send-Json $response @{
-					ok      = $true
-					entries = $matches
-					total   = $total
-				}
+				# Matched lines are already JSON — emit them directly.
+				$entriesJson = "[" + ($matched -join ",") + "]"
+				Send-RawJson $response ('{"ok":true,"entries":' + $entriesJson + ',"total":' + $total + '}')
 			}
 			catch {
 				Send-Json $response @{ ok = $false; error = $_.Exception.Message }
 			}
 		}
-       
+		
 		"/logs/clear" {
             try {
                 if (Test-Path $Global:UnifiedMachineLogPath) {

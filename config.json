@@ -8,5 +8,5 @@
     "CrfValue":  22,
     "Workers":  2,
     "UseGPU":  false,
-    "RunMode":  "Full"
+    "RunMode":  "ScanOnly"
 }

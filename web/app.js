@@ -1895,100 +1895,33 @@ document.getElementById("reviewBtn").addEventListener("click", () => {
     showCompressionModal();
 });
 
-/* ------------------------[          Polling: status badge     ]------------------------ */
+/* ------------------------[        Unified poller (single)     ]------------------------ */
 
-setInterval(async () => {
-    const status = await apiStatus();
-    const badge  = document.getElementById("statusBadge");
+let lastKnownTotal  = 0;
+let lastReviewTotal = -1;
+let unifiedPollBusy = false;
 
-    badge.textContent =
-        status.status.charAt(0).toUpperCase() + status.status.slice(1);
-
-    setUIRunningState(status.status === "running");
-    applyModeRules();
-    updateClearLogsBtn();
-
-	if (status.status === "completed" &&
-            document.querySelector("input[name='mode']:checked")?.value === "SmartCompression" &&
-            !compressionModalDismissed &&
-            document.getElementById("compressionModal").classList.contains("hidden")) {
-            showCompressionModal();
-        }
-		updateReviewButton();
-		
-    if (status.status === "running") {
-        badge.classList.remove("idle");
-        badge.classList.add("running");
-    } else {
-        badge.classList.remove("running");
-        badge.classList.add("idle");
-
-        const startBtn = document.getElementById("startBtn");
-        startBtn.classList.remove("running");
-
-        currentPhase       = "none";
-        lastRepairStatus   = null;
-        lastRepairUpdateAt = null;
-    }
-}, 1000);
-
-/* ------------------------[          Polling: live console     ]------------------------ */
-
-setInterval(async () => {
-    const data = await apiStatusConsole();
-    renderStatusBlock(data);
-}, 250);
-
-/* ------------------------[          Polling: live logs        ]------------------------ */
-
-let logPollTimer = null;
-let logPollBusy = false;
-
-async function pollLiveLog() {
-    if (!logOpen || isScrollFetching || scrollLocked || logPollBusy) {
-        logPollTimer = setTimeout(pollLiveLog, 250);
-        return;
-    }
+// Only touches the log pane when the cached total actually changed.
+// Returns true if it applied an update, false if it bailed on a guard.
+async function syncLiveLogFromTotal(newTotal) {
+    if (!logOpen || isScrollFetching || scrollLocked) return false;
 
     if (logFilterText) {
-        logPollBusy = true;
-        const meta = await apiLogTotal();
-        if (meta.ok && meta.total !== lastKnownTotal) {
-            lastKnownTotal = meta.total;
-            const data = await apiLogSearch(logFilterText, 500);
-            currentEntries = data.entries || [];
-            fullLogLength = data.total || 0;
-            logSpacer.style.height = "0px";
-            logContent.style.top   = "0px";
-            renderLogFile(currentEntries);
-            document.getElementById("logFilterCount").textContent = `${currentEntries.length} of ${fullLogLength}`;
-        }
-        logPollBusy = false;
-        logPollTimer = setTimeout(pollLiveLog, 1000);
-        return;
+        const data = await apiLogSearch(logFilterText, 500);
+        currentEntries = data.entries || [];
+        fullLogLength  = data.total || 0;
+        logSpacer.style.height = "0px";
+        logContent.style.top   = "0px";
+        renderLogFile(currentEntries);
+        document.getElementById("logFilterCount").textContent = `${currentEntries.length} of ${fullLogLength}`;
+        return true;
     }
 
     const selection = window.getSelection();
-    if (selection && selection.toString().length > 0) {
-        logPollTimer = setTimeout(pollLiveLog, 250);
-        return;
-    }
+    if (selection && selection.toString().length > 0) return false;
 
     const shouldAutoScroll = logAutoScroll;
-
-    logPollBusy = true;
-    const meta = await apiLogTotal();
-    
-    if (!meta.ok || (meta.total === lastKnownTotal && meta.total === fullLogLength)) {
-        logPollBusy = false;
-        // Nothing changed — back off to 500ms
-        logPollTimer = setTimeout(pollLiveLog, 500);
-        return;
-    }
-
-    fullLogLength = meta.total;
-    lastKnownTotal = meta.total;
-
+    fullLogLength = newTotal;
     if (shouldAutoScroll) {
         windowEnd   = fullLogLength;
         windowStart = Math.max(0, fullLogLength - 200);
@@ -2000,13 +1933,9 @@ async function pollLiveLog() {
         if (data.entries.length !== currentEntries.length ||
             data.entries[data.entries.length - 1]?.Timestamp !== currentEntries[currentEntries.length - 1]?.Timestamp) {
             currentEntries = data.entries;
-            if (shouldAutoScroll) {
-                logSpacer.style.height = "0px";
-                logContent.style.top = "0px";
-                renderLogFile(currentEntries);
-            } else {
-                renderLogFile(currentEntries);
-            }
+            logSpacer.style.height = "0px";
+            logContent.style.top   = "0px";
+            renderLogFile(currentEntries);
         }
     } else if (fullLogLength === 0) {
         logContent.textContent = "No logs found";
@@ -2015,28 +1944,66 @@ async function pollLiveLog() {
     }
 
     if (shouldAutoScroll) {
-        requestAnimationFrame(() => {
-            logViewer.scrollTop = logViewer.scrollHeight;
-        });
+        requestAnimationFrame(() => { logViewer.scrollTop = logViewer.scrollHeight; });
     }
-
-    logPollBusy = false;
-    // Data changed — poll again quickly
-    logPollTimer = setTimeout(pollLiveLog, 250);
+    return true;
 }
 
-pollLiveLog();
+async function unifiedPoll() {
+    if (unifiedPollBusy) return;          // never overlap — prevents request pile-up
+    unifiedPollBusy = true;
+    try {
+        const res  = await fetch("/status-all");
+        const data = await res.json();
 
-/* ------------------------[          Polling: live console     ]------------------------ */
+        // --- Run state + badge (was the /status poller) ---
+        const runState = data.runState || "idle";
+        const badge = document.getElementById("statusBadge");
+        badge.textContent = runState.charAt(0).toUpperCase() + runState.slice(1);
 
-setInterval(async () => {
-    const res = await fetch("/status-all");
-    const data = await res.json();
+        setUIRunningState(runState === "running");
+        applyModeRules();
+        updateClearLogsBtn();
 
-    renderStatusBlock(data);
+        if (runState === "completed" &&
+            document.querySelector("input[name='mode']:checked")?.value === "SmartCompression" &&
+            !compressionModalDismissed &&
+            document.getElementById("compressionModal").classList.contains("hidden")) {
+            showCompressionModal();
+        }
 
-    // Update log total for free — no extra request needed
-    if (data.logTotal !== undefined) {
-        lastKnownTotal = data.logTotal;
+        if (runState === "running") {
+            badge.classList.remove("idle");
+            badge.classList.add("running");
+        } else {
+            badge.classList.remove("running");
+            badge.classList.add("idle");
+            document.getElementById("startBtn").classList.remove("running");
+            currentPhase       = "none";
+            lastRepairStatus   = null;
+            lastRepairUpdateAt = null;
+        }
+
+        // --- Console (was the /status-console + /status-all pollers) ---
+        renderStatusBlock(data);
+
+        // --- Review button: refresh only when the total changes (far fewer searches) ---
+        if (data.logTotal !== undefined && data.logTotal !== lastReviewTotal) {
+            lastReviewTotal = data.logTotal;
+            updateReviewButton();
+        }
+
+        // --- Live log (was pollLiveLog): fetch a slice only when the total changed ---
+        if (data.logTotal !== undefined && data.logTotal !== lastKnownTotal) {
+            const applied = await syncLiveLogFromTotal(data.logTotal);
+            if (applied) lastKnownTotal = data.logTotal;
+        }
+    } catch (e) {
+        // transient — the next tick retries
+    } finally {
+        unifiedPollBusy = false;
     }
-}, 250);
+}
+
+setInterval(unifiedPoll, 500);
+unifiedPoll();

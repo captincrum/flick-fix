@@ -30,6 +30,7 @@ $modulesPath  = Join-Path $projectRoot "Modules"
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
 $listener.Start()
+$gpuDetectCache = $null
 
 # -------------------------[ Response Helpers ]----------------------------- #
 
@@ -246,6 +247,7 @@ while ($true) {
 				Mode            = $request.QueryString["mode"]
 				ScanAllEpisodes = ($request.QueryString["scanAll"] -eq "true")
 				Workers         = if ($request.QueryString["workers"]) { [int]$request.QueryString["workers"] } else { $config.Workers }
+				UseGPU          = ($request.QueryString["useGPU"] -eq "true")
 			}
 
 			# ------------------[ VALIDATION: Library Root ]------------------ #
@@ -461,6 +463,7 @@ while ($true) {
                     CompressionOutputPath = $config.CompressionOutputPath
                     CrfValue              = if ($config.CrfValue) { $config.CrfValue } else { 22 }
 					Workers               = if ($config.Workers -gt 0) { $config.Workers } else { 4 }
+                    UseGPU                = if ($null -ne $config.UseGPU) { [bool]$config.UseGPU } else { $false }
                 }
             }
         }
@@ -473,9 +476,34 @@ while ($true) {
             $config.AccurateMode    = ($request.QueryString["accurateMode"] -eq "true")
             $config.CrfValue        = if ($request.QueryString["crfValue"]) { [int]$request.QueryString["crfValue"] } else { 22 }
             $config.Workers         = if ($request.QueryString["workers"]) { [int]$request.QueryString["workers"] } else { 2 }
+            $config.UseGPU          = ($request.QueryString["useGPU"] -eq "true")
             Save-Config $config
             Send-Json $response @{ ok = $true }
         }
+
+		"/gpu-detect" {
+			if ($null -eq $gpuDetectCache) {
+				try {
+					$encodersRaw = & ffmpeg -hide_banner -encoders 2>&1 | Out-String
+					if ($encodersRaw -match "hevc_nvenc") {
+						$gpuDetectCache = @{ ok = $true; available = $true; encoder = "nvenc"; name = "NVIDIA NVENC" }
+					}
+					elseif ($encodersRaw -match "hevc_amf") {
+						$gpuDetectCache = @{ ok = $true; available = $true; encoder = "amf"; name = "AMD AMF" }
+					}
+					elseif ($encodersRaw -match "hevc_qsv") {
+						$gpuDetectCache = @{ ok = $true; available = $true; encoder = "qsv"; name = "Intel QSV" }
+					}
+					else {
+						$gpuDetectCache = @{ ok = $true; available = $false; encoder = ""; name = "None" }
+					}
+				}
+				catch {
+					$gpuDetectCache = @{ ok = $true; available = $false; encoder = ""; name = "None" }
+				}
+			}
+			Send-Json $response $gpuDetectCache
+		}
 		
 		"/disk-space" {
             try {
@@ -524,6 +552,7 @@ while ($true) {
                     AccurateMode    = $config.AccurateMode
                     CrfValue        = $config.CrfValue
                     Workers         = if ($payload.workers -gt 0) { [int]$payload.workers } else { if ($config.Workers -gt 0) { $config.Workers } else { 2 } }
+                    UseGPU          = if ($null -ne $payload.useGPU) { [bool]$payload.useGPU } else { [bool]$config.UseGPU }
                 }
 
                 Start-Pipeline $settings

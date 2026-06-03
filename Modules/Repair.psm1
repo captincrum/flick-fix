@@ -140,7 +140,7 @@ function Invoke-RepairStage {
     if ($VideoMode) {
         $argList += @("-c:v", $VideoMode)
         if ($CRF -gt 0) {
-            $argList += @("-crf", $CRF.ToString())
+            $argList += UM-ResolveEncoderArgs -Encoder $VideoMode -CRF $CRF
         }
     } else {
         $argList += @("-c", "copy")
@@ -241,9 +241,13 @@ function Invoke-UMRepair {
         $contextObj    = $extra.Context
         $libraryType   = $extra.Library
         $logPath       = $extra.LogPath
+        $useGPU        = [bool]$extra.UseGPU
 
         # Set the log path so logging functions work inside the worker
         $Global:UnifiedMachineLogPath = $logPath
+
+        # Resolve the video encoder once for this worker (GPU or CPU)
+        $videoEncoder = UM-ResolveEncoder -BaseCodec "libx264" -UseGPU $useGPU
 
         $friendlyNames = @{
             "Remux"                   = "Fast Repair"
@@ -254,11 +258,11 @@ function Invoke-UMRepair {
         }
 
         $repairStages = @(
-            @{ Name="Remux";                   Video=$null;     Audio=$null;  Extra=@();                   ForceExt=$null  },
-            @{ Name="ReencodeVideo_CopyAudio"; Video="libx264"; Audio="copy"; Extra=@();                   ForceExt=$null  },
-            @{ Name="ReencodeVideo_AAC";       Video="libx264"; Audio="aac";  Extra=@();                   ForceExt=$null  },
-            @{ Name="FullReencode";            Video="libx264"; Audio="aac";  Extra=@("-preset","medium"); ForceExt=$null  },
-            @{ Name="LastResortMp4";           Video="libx264"; Audio="aac";  Extra=@("-preset","medium"); ForceExt=".mp4" }
+            @{ Name="Remux";                   Video=$null;          Audio=$null;  Extra=@();                   ForceExt=$null  },
+            @{ Name="ReencodeVideo_CopyAudio"; Video=$videoEncoder;  Audio="copy"; Extra=@();                   ForceExt=$null  },
+            @{ Name="ReencodeVideo_AAC";       Video=$videoEncoder;  Audio="aac";  Extra=@();                   ForceExt=$null  },
+            @{ Name="FullReencode";            Video=$videoEncoder;  Audio="aac";  Extra=@("-preset","medium"); ForceExt=$null  },
+            @{ Name="LastResortMp4";           Video=$videoEncoder;  Audio="aac";  Extra=@("-preset","medium"); ForceExt=".mp4" }
         )
 
         $sourcePath = $filePath
@@ -505,6 +509,7 @@ function Invoke-UMRepair {
             Context = $Context
             Library = $Context.LibraryType
             LogPath = $Global:UnifiedMachineLogPath
+            UseGPU  = [bool]$Context.UseGPU
         } `
         -OnResult   $onResult `
         -OnProgress $onProgress

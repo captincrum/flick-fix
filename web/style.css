@@ -488,6 +488,38 @@ input[type="text"] {
     line-height: 1.4;
 }
 
+/* ------------------------[ UI: GPU encoding toggle ]---------------------- */
+.scan-toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.gpu-toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.desc-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.desc-row .smart-desc {
+    flex: 1;
+    min-width: 0;
+}
+
+.desc-row .gpu-status {
+    flex: 0 0 auto;
+    text-align: right;
+    white-space: nowrap;
+}
+
 /* ------------------------[ UI: Mode selector ]---------------------- */
 .mode-row input[type="radio"] { accent-color: var(--accent-strong); }
 
@@ -628,26 +660,41 @@ input[type="text"] {
     box-shadow:
         0 0 0 1px #2c3445,
         0 0 30px rgba(0,0,0,0.8);
-    width: 65vw;
+    width: 75vw;
     height: 68vh;
     max-width: 1400px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     resize: both;
-    min-width: 700px;
+    min-width: 800px;
     min-height: 400px;
+}
+
+.compression-tree tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.compression-tree tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .compression-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
+    padding: 8px 24px;
     border-bottom: 1px solid var(--border-subtle);
     background: #21242d;
     border-radius: 11px 11px 0 0;
     flex-shrink: 0;
+}
+
+.compression-tree-wrapper {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    padding: 16px;
 }
 
 .compression-header h2 {
@@ -680,14 +727,13 @@ input[type="text"] {
 }
 
 .compression-left {
-    width: 300px;
-    min-width: 300px;
-    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    border-right: 1px solid var(--border-subtle);
+    width: 350px;
+    min-width: 350px;
     flex-shrink: 0;
+    padding: 16px;
+    gap: 0;
 }
 
 .compression-output-section {
@@ -717,11 +763,7 @@ input[type="text"] {
 }
 
 .compression-summary {
-    flex: 1;
-    font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.8;
-    overflow: hidden;
+    font-size: 13px;
 }
 
 .compression-summary .summary-grid {
@@ -759,38 +801,34 @@ input[type="text"] {
 
 .compression-right {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
     min-width: 0;
+    overflow: hidden;
+    display: flex;
+    padding: 16px;
 }
 
 /* ------------------------[ UI: Tree table ]---------------------- */
-.compression-tree-wrapper {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
 
 .compression-tree {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
     font-size: 13px;
 }
 
 .tree-th {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border-subtle);
-    background: #1e2335;
+    position: sticky;
+    top: 0;
+	background: var(--bg-elevated);
+	box-shadow: 0px 1px 0 var(--border-subtle);
+    text-align: left;
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    position: relative;
-    text-align: left;
-    white-space: nowrap;
+    color: var(--text-muted);
+    padding: 0 8px 10px 8px;
 }
 
 .tree-th-size { text-align: right; }

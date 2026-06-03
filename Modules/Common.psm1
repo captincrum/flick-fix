@@ -112,6 +112,61 @@ function UM-LibraryType {
     return "Movies"
 }
 
+# ------------------------------[ GPU Encoding ]---------------------------- #
+
+# Resolve a base CPU codec to the appropriate hardware encoder when GPU
+# acceleration is requested and available. Detection priority follows the
+# order NVIDIA (nvenc) -> AMD (amf) -> Intel (qsv). If GPU is off, no
+# compatible encoder is found, or the base codec is unrecognized, the
+# original codec string is returned unchanged.
+function UM-ResolveEncoder {
+    param(
+        [Parameter(Mandatory=$true)][string]$BaseCodec,
+        [bool]$UseGPU = $false
+    )
+
+    if (-not $UseGPU) { return $BaseCodec }
+
+    $encodersRaw = ""
+    try {
+        $encodersRaw = & ffmpeg -hide_banner -encoders 2>&1 | Out-String
+    } catch {
+        return $BaseCodec
+    }
+
+    $gpuType = $null
+    if     ($encodersRaw -match "hevc_nvenc") { $gpuType = "nvenc" }
+    elseif ($encodersRaw -match "hevc_amf")   { $gpuType = "amf" }
+    elseif ($encodersRaw -match "hevc_qsv")   { $gpuType = "qsv" }
+
+    if (-not $gpuType) { return $BaseCodec }
+
+    switch ($BaseCodec) {
+        "libx264" { return "h264_$gpuType" }
+        "libx265" { return "hevc_$gpuType" }
+        default   { return $BaseCodec }
+    }
+}
+
+# Build the quality-control arguments for a given encoder. GPU encoders do
+# not accept -crf, so each family gets its own equivalent quality mapping.
+# CPU encoders fall through to the standard -crf flag.
+function UM-ResolveEncoderArgs {
+    param(
+        [Parameter(Mandatory=$true)][string]$Encoder,
+        [int]$CRF = 22
+    )
+
+    $q = $CRF.ToString()
+
+    switch -Wildcard ($Encoder) {
+        "*_nvenc" { return @("-rc", "constqp", "-qp", $q, "-preset", "p4") }
+        "*_amf"   { return @("-quality", "quality", "-qp_i", $q, "-qp_p", $q) }
+        "*_qsv"   { return @("-global_quality", $q, "-preset", "medium") }
+        default   { return @("-crf", $q) }
+    }
+}
+
 # ------------------------------[   Utilities   ]---------------------------- #
 
 function UM-CleanupPreviousRepairs {
@@ -407,4 +462,6 @@ Export-ModuleMember -Function `
     UM-PrettyMode, `
     UM-VideoExtensions, `
     UM-LibraryType, `
+    UM-ResolveEncoder, `
+    UM-ResolveEncoderArgs, `
     Invoke-UMWorkerPool

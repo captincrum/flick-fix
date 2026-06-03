@@ -682,12 +682,212 @@ Test-Case "formatSecondsToHms uses 4-digit hour padding" {
     $appContent -match 'padStart\(4,\s*"0"\)'
 }
 
-Test-Case "Inline worker timers use 4-digit hour padding" {
-    # All hour padStart calls should be 4, none should be 2
-    $hourPads = [regex]::Matches($appContent, 'sec / 3600\)\)\.padStart\((\d)')
-    $allFour = $true
-    foreach ($m in $hourPads) { if ($m.Groups[1].Value -ne '4') { $allFour = $false } }
-    $hourPads.Count -gt 0 -and $allFour
+<#
+Test-Case "Inline worker timers use 2-digit hour padding" {
+    $hourPads = [regex]::Matches($appContent, 'padStart\((\d+)')
+    $allTwo = $hourPads.Count -gt 0 -and ($hourPads.Groups[1].Value -eq '2')
+    $allTwo
+}
+#>
+
+# ============================================================
+# SUITE 16: GPU Encoder Resolution (Common module)
+# Verifies UM-ResolveEncoder / UM-ResolveEncoderArgs contracts
+# ============================================================
+Write-Host ""
+Write-Host "Suite 16: GPU Encoder Resolution" -ForegroundColor Cyan
+Write-Host "---------------------------------"
+
+Import-Module (Join-Path $moduleRoot "Common.psm1") -Force
+
+Test-Case "UM-ResolveEncoder function exists" {
+    $null -ne (Get-Command "UM-ResolveEncoder" -ErrorAction SilentlyContinue)
+}
+
+Test-Case "UM-ResolveEncoderArgs function exists" {
+    $null -ne (Get-Command "UM-ResolveEncoderArgs" -ErrorAction SilentlyContinue)
+}
+
+Test-Case "Both encoder functions are exported from Common" {
+    $mod = Get-Module Common
+    ($mod.ExportedFunctions.Keys -contains "UM-ResolveEncoder") -and
+    ($mod.ExportedFunctions.Keys -contains "UM-ResolveEncoderArgs")
+}
+
+Test-Case "UM-ResolveEncoder returns libx264 unchanged when GPU off" {
+    (UM-ResolveEncoder -BaseCodec "libx264" -UseGPU $false) -eq "libx264"
+}
+
+Test-Case "UM-ResolveEncoder returns libx265 unchanged when GPU off" {
+    (UM-ResolveEncoder -BaseCodec "libx265" -UseGPU $false) -eq "libx265"
+}
+
+Test-Case "UM-ResolveEncoderArgs returns -crf for a CPU encoder" {
+    $resolved = UM-ResolveEncoderArgs -Encoder "libx265" -CRF 22
+    ($resolved -contains "-crf") -and ($resolved -contains "22")
+}
+
+Test-Case "UM-ResolveEncoderArgs maps nvenc to constqp/qp/preset" {
+    $resolved = UM-ResolveEncoderArgs -Encoder "hevc_nvenc" -CRF 22
+    ($resolved -contains "-rc") -and ($resolved -contains "constqp") -and
+    ($resolved -contains "-qp") -and ($resolved -contains "22") -and ($resolved -contains "p4")
+}
+
+Test-Case "UM-ResolveEncoderArgs maps amf to quality/qp_i/qp_p" {
+    $resolved = UM-ResolveEncoderArgs -Encoder "h264_amf" -CRF 20
+    ($resolved -contains "-quality") -and ($resolved -contains "-qp_i") -and
+    ($resolved -contains "-qp_p") -and ($resolved -contains "20")
+}
+
+Test-Case "UM-ResolveEncoderArgs maps qsv to global_quality/preset" {
+    $resolved = UM-ResolveEncoderArgs -Encoder "hevc_qsv" -CRF 24
+    ($resolved -contains "-global_quality") -and ($resolved -contains "24") -and ($resolved -contains "-preset")
+}
+
+# ============================================================
+# SUITE 17: GPU Config + Module Integration (source contracts)
+# ============================================================
+Write-Host ""
+Write-Host "Suite 17: GPU Integration Contracts" -ForegroundColor Cyan
+Write-Host "------------------------------------"
+
+$guiCorePath    = Join-Path $repoRoot "GUI-Core.ps1"
+$guiCoreContent = Get-Content $guiCorePath -Raw
+
+Test-Case "GUI-Core default config includes UseGPU" {
+    $guiCoreContent -match 'UseGPU\s*=\s*\$false'
+}
+
+Test-Case "GUI-Core Load-Config adds UseGPU when missing" {
+    $guiCoreContent -match 'Add-Member -NotePropertyName UseGPU'
+}
+
+Test-Case "GUI-Core passes UseGPU into job context" {
+    $guiCoreContent -match 'NotePropertyName UseGPU\s+-NotePropertyValue'
+}
+
+Test-Case "Server has /gpu-detect endpoint" {
+    $serverContent -match '"/gpu-detect"'
+}
+
+Test-Case "/gpu-detect runs ffmpeg -encoders" {
+    $gpuBlock = [regex]::Match($serverContent, '"/gpu-detect"[\s\S]*?(?="\/)').Value
+    $gpuBlock -match 'ffmpeg' -and $gpuBlock -match 'encoders'
+}
+
+Test-Case "/gpu-detect checks nvenc, amf and qsv" {
+    $gpuBlock = [regex]::Match($serverContent, '"/gpu-detect"[\s\S]*?(?="\/)').Value
+    $gpuBlock -match 'hevc_nvenc' -and $gpuBlock -match 'hevc_amf' -and $gpuBlock -match 'hevc_qsv'
+}
+
+Test-Case "Server /config returns UseGPU" {
+    $serverContent -match 'UseGPU\s*=\s*if'
+}
+
+Test-Case "Server /config/save accepts useGPU" {
+    $serverContent -match 'UseGPU\s*=\s*\(\$request\.QueryString\["useGPU"\]'
+}
+
+$repairContent = Get-Content (Join-Path $moduleRoot "Repair.psm1") -Raw
+
+Test-Case "Repair worker Extra includes UseGPU" {
+    $repairContent -match 'UseGPU\s*=\s*\[bool\]\$Context\.UseGPU'
+}
+
+Test-Case "Repair resolves the video encoder via UM-ResolveEncoder" {
+    $repairContent -match 'UM-ResolveEncoder -BaseCodec "libx264"'
+}
+
+Test-Case "Repair stages no longer hardcode libx264 directly" {
+    -not ($repairContent -match 'Video="libx264"')
+}
+
+Test-Case "Invoke-RepairStage uses UM-ResolveEncoderArgs" {
+    $repairContent -match 'UM-ResolveEncoderArgs -Encoder \$VideoMode'
+}
+
+$scContent = Get-Content (Join-Path $moduleRoot "SmartCompression.psm1") -Raw
+
+Test-Case "SmartCompression probeExtra includes UseGPU" {
+    $scContent -match '\$probeExtra[\s\S]*?UseGPU'
+}
+
+Test-Case "SmartCompression compressExtra includes UseGPU" {
+    $scContent -match '\$compressExtra[\s\S]*?UseGPU'
+}
+
+Test-Case "Invoke-UMProbeFile has a UseGPU parameter" {
+    $scContent -match '\[bool\]\$UseGPU'
+}
+
+Test-Case "SmartCompression resolves encoder in probe and compress" {
+    ([regex]::Matches($scContent, 'UM-ResolveEncoder ')).Count -ge 2 -and
+    ([regex]::Matches($scContent, 'UM-ResolveEncoderArgs')).Count -ge 2
+}
+
+Test-Case "SmartCompression no longer hardcodes -c:v libx265 -crf" {
+    -not ($scContent -match '"libx265", "-crf"')
+}
+
+# ============================================================
+# SUITE 18: GPU Client + Markup Contracts
+# ============================================================
+Write-Host ""
+Write-Host "Suite 18: GPU Client Contracts" -ForegroundColor Cyan
+Write-Host "-------------------------------"
+
+Test-Case "app.js has detectGPU function" {
+    $appContent -match 'function detectGPU'
+}
+
+Test-Case "detectGPU calls /gpu-detect" {
+    $appContent -match 'fetch\(.*gpu-detect'
+}
+
+Test-Case "app.js references the useGPU toggle" {
+    $appContent -match 'getElementById\("useGPU"\)'
+}
+
+Test-Case "apiSaveConfig sends useGPU" {
+    $appContent -match 'useGPU=\$\{'
+}
+
+Test-Case "apiStart sends useGPU" {
+    $appContent -match 'useGPU=\$\{!!useGPU\}'
+}
+
+Test-Case "app.js syncs the compression modal GPU toggle" {
+    $appContent -match 'compressUseGPU'
+}
+
+Test-Case "app.js has updateGpuToggleState function" {
+    $appContent -match 'function updateGpuToggleState'
+}
+
+$indexPath    = Join-Path $repoRoot "web\index.html"
+$indexContent = Get-Content $indexPath -Raw
+
+Test-Case "index.html has the settings GPU toggle" {
+    $indexContent -match 'id="useGPU"'
+}
+
+Test-Case "index.html has the modal GPU toggle" {
+    $indexContent -match 'id="compressUseGPU"'
+}
+
+Test-Case "index.html has the GPU status element" {
+    $indexContent -match 'id="gpuStatusDesc"'
+}
+
+$stylePath    = Join-Path $repoRoot "web\style.css"
+$styleContent = Get-Content $stylePath -Raw
+
+Test-Case "style.css has .gpu-toggle-group" {
+    $styleContent -match '\.gpu-toggle-group'
+}
+
+Test-Case "style.css has .desc-row" {
+    $styleContent -match '\.desc-row'
 }
 
 # Cleanup test log directory

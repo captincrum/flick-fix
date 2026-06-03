@@ -11,7 +11,7 @@ async function resetConfig(page) {
     await page.goto(BASE_URL);
     await page.waitForFunction(() => {
         const desc = document.getElementById('scanModeDesc');
-        return desc && desc.textContent.includes('fast results');
+        return desc && desc.textContent.includes('First episode');
     });
 }
 
@@ -120,7 +120,7 @@ test.describe('Settings Panel', () => {
 
     test('Scan mode toggle shows Quick description when unchecked', async ({ page }) => {
         await page.locator('#scanAllEpisodes').uncheck();
-        await expect(page.locator('#scanModeDesc')).toContainText('fast results');
+        await expect(page.locator('#scanModeDesc')).toContainText('First episode');
     });
 
 	test('Scan mode description changes when toggled to Full', async ({ page }) => {
@@ -1034,6 +1034,109 @@ test.describe('Timer Formatting', () => {
     test('formatSecondsToHms handles negative input gracefully', async ({ page }) => {
         const result = await page.evaluate(() => formatSecondsToHms(-50));
         expect(result).toBe('0000:00:00');
+    });
+
+});
+// ================================================================
+// SUITE 17: GPU Encoding Toggle
+// Verifies toggle existence, detection, config persistence,
+// modal sync, and disabled-state rules
+// ================================================================
+test.describe('GPU Encoding Toggle', () => {
+
+    test.beforeEach(async ({ page }) => { await resetConfig(page); });
+
+    async function waitForDetection(page) {
+        await page.waitForFunction(() => {
+            const d = document.getElementById('gpuStatusDesc');
+            return d && !d.textContent.includes('Detecting');
+        });
+    }
+
+    test('Settings GPU toggle is present', async ({ page }) => {
+        await expect(page.locator('#useGPU')).toBeAttached();
+    });
+
+    test('GPU status text element is present', async ({ page }) => {
+        await expect(page.locator('#gpuStatusDesc')).toBeAttached();
+    });
+
+    test('Compression modal GPU toggle is present', async ({ page }) => {
+        await expect(page.locator('#compressUseGPU')).toBeAttached();
+    });
+
+    test('/gpu-detect returns the expected shape', async ({ page }) => {
+        const res = await page.request.get(`${BASE_URL}/gpu-detect`);
+        expect(res.ok()).toBe(true);
+        const json = await res.json();
+        expect(json).toHaveProperty('available');
+        expect(json).toHaveProperty('encoder');
+        expect(json).toHaveProperty('name');
+    });
+
+    test('/config exposes a UseGPU field', async ({ page }) => {
+        const res = await page.request.get(`${BASE_URL}/config`);
+        const json = await res.json();
+        expect(json.config).toHaveProperty('UseGPU');
+    });
+
+    test('GPU status text resolves after detection', async ({ page }) => {
+    await waitForDetection(page);
+    const text = (await page.locator('#gpuStatusDesc').textContent()).trim();
+    // CPU selected: empty string; GPU selected: "NVIDIA detected" etc.
+    expect(text === '' || text.includes('detected')).toBe(true);
+	});
+
+    test('GPU toggle enabled state matches detection result', async ({ page }) => {
+        await waitForDetection(page);
+        const status = await page.locator('#gpuStatusDesc').textContent();
+        if (status.includes('No compatible GPU')) {
+            await expect(page.locator('#useGPU')).toBeDisabled();
+            await expect(page.locator('.gpu-toggle-group')).toHaveClass(/disabled-ui/);
+        } else {
+            await expect(page.locator('#useGPU')).toBeEnabled();
+        }
+    });
+
+    test('GPU toggle is disabled in Scan Only mode', async ({ page }) => {
+        await waitForDetection(page);
+        await selectMode(page, 'ScanOnly');
+        await expect(page.locator('#useGPU')).toBeDisabled();
+    });
+
+    test('Changing the settings GPU toggle syncs the modal toggle', async ({ page }) => {
+        await waitForDetection(page);
+        await page.evaluate(() => {
+            const m = document.getElementById('useGPU');
+            m.checked = true;
+            m.dispatchEvent(new Event('change'));
+        });
+        await expect(page.locator('#compressUseGPU')).toBeChecked();
+        await page.evaluate(() => {
+            const m = document.getElementById('useGPU');
+            m.checked = false;
+            m.dispatchEvent(new Event('change'));
+        });
+        await expect(page.locator('#compressUseGPU')).not.toBeChecked();
+    });
+
+    test('Changing the modal GPU toggle syncs the settings toggle', async ({ page }) => {
+        await waitForDetection(page);
+        await page.evaluate(() => {
+            const m = document.getElementById('compressUseGPU');
+            m.checked = true;
+            m.dispatchEvent(new Event('change'));
+        });
+        await expect(page.locator('#useGPU')).toBeChecked();
+    });
+
+    test('GPU preference persists through /config/save round-trip', async ({ page }) => {
+        await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false&useGPU=true`);
+        const res = await page.request.get(`${BASE_URL}/config`);
+        const json = await res.json();
+        expect(json.config.UseGPU).toBe(true);
+        // restore
+        await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false&useGPU=false`);
     });
 
 });

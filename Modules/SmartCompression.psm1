@@ -68,6 +68,7 @@ function Invoke-UMSmartProbe {
         AccurateMode = $AccurateMode
         CrfValue     = $crfValue
         ProbedPaths  = $probedPaths
+        UseGPU       = [bool]$Context.UseGPU
     }
 
     $probeWorkScript = {
@@ -85,7 +86,8 @@ function Invoke-UMSmartProbe {
             -WorkerID           $workerID `
             -FolderName         $folderName `
             -EpisodeName        $episodeName `
-            -ExistingSampleKbps $existingKbps
+            -ExistingSampleKbps $existingKbps `
+            -UseGPU             $extra.UseGPU
     }
 
     $Global:UM_ProbeCount      = $scannedFiles
@@ -135,7 +137,8 @@ function Invoke-UMProbeFile {
         [int]$WorkerID             = 0,
         [string]$FolderName        = "",
         [string]$EpisodeName       = "",
-        [double[]]$ExistingSampleKbps = @()
+        [double[]]$ExistingSampleKbps = @(),
+        [bool]$UseGPU              = $false
     )
 
     $originalBytes = (Get-Item $FilePath).Length
@@ -243,6 +246,11 @@ function Invoke-UMProbeFile {
     }
 
 	$passNumber = $ExistingSampleKbps.Count
+
+    # Resolve encoder + quality args once for this probe (GPU or CPU)
+    $probeEncoder     = UM-ResolveEncoder -BaseCodec "libx265" -UseGPU $UseGPU
+    $probeEncoderArgs = UM-ResolveEncoderArgs -Encoder $probeEncoder -CRF $CrfValue
+
 	foreach ($seekPoint in $samplePoints) {
 		$passNumber++
 		$totalPasses = $samplePoints.Count + $ExistingSampleKbps.Count
@@ -255,8 +263,10 @@ function Invoke-UMProbeFile {
 
         $seek = [math]::Max(0, [math]::Min($seekPoint, [int]$durationSec - 35))
 
-        $encodeOutput = & ffmpeg -ss $seek -t 30 -i $FilePath `
-            -c:v libx265 -crf $CrfValue -c:a copy -f null NUL 2>&1
+        $encodeArgs = @("-ss", $seek, "-t", 30, "-i", $FilePath, "-c:v", $probeEncoder) +
+                      $probeEncoderArgs +
+                      @("-c:a", "copy", "-f", "null", "NUL")
+        $encodeOutput = & ffmpeg @encodeArgs 2>&1
 
         $summaryLine = $encodeOutput | Select-String "encoded \d+ frames"
         if ($summaryLine) {
@@ -424,7 +434,13 @@ function Invoke-UMCompressFile {
         ConvertTo-Json -Compress | Set-Content -Path $statusFile -Encoding UTF8
 
     $originalMB = [math]::Round((Get-Item $sourcePath).Length / 1MB, 2)
-    $argList = @("-y", "-i", $sourcePath, "-c:v", "libx265", "-crf", $crf.ToString(), "-c:a", "copy", "-loglevel", "error", $outputPath)
+
+    $useGPU       = [bool]$extra.UseGPU
+    $encoder      = UM-ResolveEncoder -BaseCodec "libx265" -UseGPU $useGPU
+    $encoderArgs  = UM-ResolveEncoderArgs -Encoder $encoder -CRF $crf
+    $argList = @("-y", "-i", $sourcePath, "-c:v", $encoder) +
+               $encoderArgs +
+               @("-c:a", "copy", "-loglevel", "error", $outputPath)
     & ffmpeg @argList 2>&1 | Out-Null
     $exitCode = $LASTEXITCODE
 
@@ -512,6 +528,7 @@ function Invoke-UMCompress {
         SourceRoot      = $sourceRoot
         CRF             = $crf
         ProbeResultsMap = $probeResultsMap
+        UseGPU          = [bool]$Context.UseGPU
     }
 
     $compressWorkScript = { param($f, $e, $s, $w) Invoke-UMCompressFile $f $e $s $w }

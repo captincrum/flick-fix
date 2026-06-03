@@ -35,6 +35,64 @@ let windowEnd = 200;
 
 let resumeShouldBeVisible = false;
 
+/* ------------------------[          GPU encoding state        ]------------------------ */
+
+let gpuAvailable = false;
+let gpuName      = "None";
+
+function getGpuStatusText() {
+    if (!gpuAvailable) return "No GPU detected";
+    const on = document.getElementById("useGPU").checked;
+    return on ? gpuName.split(" ")[0] + " detected" : "";
+}
+
+function updateGpuStatus() {
+    const main = document.getElementById("gpuStatusDesc");
+    if (main) main.textContent = getGpuStatusText();
+    const modal = document.getElementById("compressGpuStatusDesc");
+    if (modal) modal.textContent = getGpuStatusText();
+}
+
+function updateGpuToggleState() {
+    const gpuToggle = document.getElementById("useGPU");
+    const gpuGroup  = document.querySelector(".gpu-toggle-group");
+    const isRunning = document.getElementById("startBtn").disabled;
+    const selectedMode = document.querySelector("input[name='mode']:checked")?.value;
+    const isScanOnly   = selectedMode === "ScanOnly";
+
+    // Settings toggle: gated by detection, Scan mode, and running state
+    const shouldDisable = !gpuAvailable || isScanOnly || isRunning;
+    if (gpuToggle) gpuToggle.disabled = shouldDisable;
+    if (gpuGroup)  gpuGroup.classList.toggle("disabled-ui", shouldDisable);
+
+    // Modal toggle: only gated by detection (modal isn't shown while running)
+    const modalToggle = document.getElementById("compressUseGPU");
+    const modalGroup  = document.querySelector(".gpu-toggle-group-modal");
+    if (modalToggle) modalToggle.disabled = !gpuAvailable;
+    if (modalGroup)  modalGroup.classList.toggle("disabled-ui", !gpuAvailable);
+}
+
+async function detectGPU(savedPref) {
+    const gpuToggle = document.getElementById("useGPU");
+    try {
+        const res  = await fetch("/gpu-detect");
+        const data = await res.json();
+        gpuAvailable = !!data.available;
+        gpuName      = data.name || "None";
+    } catch {
+        gpuAvailable = false;
+        gpuName      = "None";
+    }
+
+    const pref = gpuAvailable ? !!savedPref : false;
+    if (gpuToggle) gpuToggle.checked = pref;
+    const modalToggle = document.getElementById("compressUseGPU");
+    if (modalToggle) modalToggle.checked = pref;
+
+    updateGpuToggleState();
+    updateGpuStatus();
+}
+
 /* ------------------------[       Clear Logs button state      ]------------------------ */
 
 function updateClearLogsBtn() {
@@ -71,7 +129,7 @@ function setUIRunningState(isRunning) {
 		document.getElementById("accurateMode").disabled = true;
         document.getElementById("scanAllEpisodes").disabled = true;
         document.querySelector("#accurateMode").closest(".toggle-row").classList.add("disabled-ui");
-        document.querySelector("#scanAllEpisodes").closest(".toggle-row").classList.add("disabled-ui");		
+        document.querySelector("#scanAllEpisodes").closest(".scan-toggle-group").classList.add("disabled-ui");		
         startBtn.disabled       = true;
         cancelBtn.disabled      = false;
         modeRadios.forEach(r => (r.disabled = true));
@@ -97,7 +155,7 @@ function setUIRunningState(isRunning) {
 		document.getElementById("accurateMode").disabled = false;
         document.getElementById("scanAllEpisodes").disabled = false;
         document.querySelector("#accurateMode").closest(".toggle-row").classList.remove("disabled-ui");
-        document.querySelector("#scanAllEpisodes").closest(".toggle-row").classList.remove("disabled-ui");		
+        document.querySelector("#scanAllEpisodes").closest(".scan-toggle-group").classList.remove("disabled-ui");		
         startBtn.disabled       = false;
         cancelBtn.disabled      = true;
         modeRadios.forEach(r => (r.disabled = false));
@@ -111,6 +169,9 @@ function setUIRunningState(isRunning) {
         cancelBtn.classList.add("disabled-ui");
         modeRadios.forEach(r => r.classList.remove("disabled-ui"));
     }
+
+    // GPU toggle follows the same running-state lockout as other settings
+    updateGpuToggleState();
 }
 
 /* ------------------------[         Mode-based UI rules        ]------------------------ */
@@ -139,7 +200,7 @@ function applyModeRules() {
     repairedInput.classList.toggle("disabled-ui", lockRepaired);
     browseRepaired.classList.toggle("disabled-ui", lockRepaired);
 
-	const scanToggleRow  = document.querySelector("#scanAllEpisodes").closest(".toggle-row");
+	const scanToggleRow  = document.querySelector("#scanAllEpisodes").closest(".scan-toggle-group");
 
     rootInput.disabled  = isRepairOnly;
     browseRoot.disabled = isRepairOnly;
@@ -163,6 +224,10 @@ function applyModeRules() {
         browseRepaired.classList.toggle("disabled-ui", isSmartCompression);
         scanAll.classList.remove("disabled-ui");
     }
+
+    // GPU toggle is disabled in Scan mode (no encoding happens) and whenever
+    // no compatible GPU was detected.
+    updateGpuToggleState();
 }
 
 /* ------------------------[        Time formatting helpers     ]------------------------ */
@@ -180,6 +245,16 @@ function formatSecondsToHms(totalSeconds) {
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
     return `${String(h).padStart(4, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function padElapsed(str) {
+    if (!str) return "0000:00:00";
+    const parts = str.split(":");
+    if (parts.length === 3) {
+        parts[0] = parts[0].padStart(4, "0");
+        return parts.join(":");
+    }
+    return str;
 }
 
 /* ------------------------[          Log rendering helpers     ]------------------------ */
@@ -371,7 +446,7 @@ function renderCompressConsole(s) {
     block += "----------------------------------------\n";
     block += "Phase 3    : Compressing Files\n";
     block += `Mode       : Smart Compression\n`;
-    block += `Elapsed    : ${s.Elapsed || "0000:00:00"}\n`;
+    block += `Elapsed    : ${padElapsed(s.Elapsed)}\n`;
     block += `Compressed : ${s.ItemIndex} / ${s.TotalItems}\n`;
     block += `Completion : ${pct}%\n`;
     block += `CRF        : ${s.CRF}\n`;
@@ -400,19 +475,19 @@ function renderRepairConsole() {
             continue;
         }
 
-        let fileElapsed = "0000:00:00";
+        let fileElapsed = "00:00:00";
         if (w.FileStart) {
             const sec = Math.floor((Date.now() - Date.parse(w.FileStart)) / 1000);
-            const hh = String(Math.floor(sec / 3600)).padStart(4, "0");
+            const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
             const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
             const ss = String(sec % 60).padStart(2, "0");
             fileElapsed = `${hh}:${mm}:${ss}`;
         }
 
-        let attemptElapsed = "0000:00:00";
+        let attemptElapsed = "00:00:00";
         if (w.AttemptStart) {
             const sec = Math.floor((Date.now() - Date.parse(w.AttemptStart)) / 1000);
-            const hh = String(Math.floor(sec / 3600)).padStart(4, "0");
+            const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
             const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
             const ss = String(sec % 60).padStart(2, "0");
             attemptElapsed = `${hh}:${mm}:${ss}`;
@@ -430,7 +505,7 @@ function renderRepairConsole() {
     block += "----------------------------------------\n";
     block += "Phase 3          : Repairing & Logging\n";
     block += `Mode             : ${s.Mode || "Repair"}\n`;
-    block += `Elapsed Time     : ${s.Elapsed || "0000:00:00"}\n`;
+    block += `Elapsed Time     : ${padElapsed(s.Elapsed)}\n`;
     block += `Repaired         : ${s.ItemIndex} / ${s.TotalItems}\n`;
     block += `Completion       : ${pct}%\n`;
     block += "----------------------------------------\n";
@@ -485,10 +560,10 @@ function renderStatusBlock(data) {
 			}
 
 			const sample = (w.Sample != null && w.TotalSamples != null) ? `${w.Sample}/${w.TotalSamples}` : "--";
-			let sampleElapsed = "0000:00:00";
+			let sampleElapsed = "00:00:00";
 			if (w.SampleStart) {
 				const sec = Math.floor((Date.now() - Date.parse(w.SampleStart)) / 1000);
-				const hh = String(Math.floor(sec / 3600)).padStart(4, "0");
+				const hh = String(Math.floor(sec / 3600)).padStart(2, "0");
 				const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
 				const ss = String(sec % 60).padStart(2, "0");
 				sampleElapsed = `${hh}:${mm}:${ss}`;
@@ -504,7 +579,7 @@ function renderStatusBlock(data) {
 		block += `Phase 2    : ${phase2Label}\n`;
 		const modeNames = { Full: "Scan & Repair", ScanOnly: "Scan", RepairOnly: "Repair", SmartCompression: "Smart Compression" };
 		block += `Mode       : ${modeNames[s.Mode] || s.Mode}\n`;
-		block += `Elapsed    : ${s.Elapsed}\n`;
+		block += `Elapsed    : ${padElapsed(s.Elapsed)}\n`;
 		block += `Scanned    : ${s.Scanned}/${s.Total}\n`;
 		block += `Completion : ${Math.round((s.Scanned / s.Total) * 100)}%\n`;
 		block += "----------------------------------------\n";
@@ -544,10 +619,10 @@ function renderStatusBlock(data) {
 
 /* ------------------------[              API helpers           ]------------------------ */
 
-async function apiStart(root, repaired, mode, scanAll, workers) {
+async function apiStart(root, repaired, mode, scanAll, workers, useGPU) {
     const url = `/start?root=${encodeURIComponent(root)}&repaired=${encodeURIComponent(
         repaired
-    )}&mode=${encodeURIComponent(mode)}&scanAll=${scanAll}&workers=${workers || 4}`;
+    )}&mode=${encodeURIComponent(mode)}&scanAll=${scanAll}&workers=${workers || 4}&useGPU=${!!useGPU}`;
     const res = await fetch(url);
     return res.json();
 }
@@ -625,7 +700,8 @@ async function apiSaveConfig() {
     const accurateMode = document.getElementById("accurateMode").checked;
     const crfValue     = parseInt(document.getElementById("crfSlider").value);
     const workers = parseInt(document.getElementById("workerCount").value) || 2;
-    await fetch(`/config/save?root=${encodeURIComponent(root)}&repaired=${encodeURIComponent(repaired)}&mode=${encodeURIComponent(mode)}&scanAll=${scanAll}&accurateMode=${accurateMode}`);
+    const useGPU       = document.getElementById("useGPU").checked;
+    await fetch(`/config/save?root=${encodeURIComponent(root)}&repaired=${encodeURIComponent(repaired)}&mode=${encodeURIComponent(mode)}&scanAll=${scanAll}&accurateMode=${accurateMode}&crfValue=${crfValue}&workers=${workers}&useGPU=${useGPU}`);
 }
 
 async function loadConfig() {
@@ -638,8 +714,8 @@ async function loadConfig() {
     document.getElementById("repairedPath").value      = cfg.RepairedPath || "";
     document.getElementById("scanAllEpisodes").checked = cfg.ScanAllEpisodes || false;
     document.getElementById("scanModeDesc").textContent = cfg.ScanAllEpisodes
-        ? "Scans every episode - slower but more precise"
-        : "Samples the first episode per season - fast results across large libraries";
+        ? "Scans every episode"
+        : "First episode per season";
     document.getElementById("accurateMode").checked    = cfg.AccurateMode || false;
 	document.getElementById("crfSlider").value         = 22;
     document.getElementById("crfValue").textContent    = 22;
@@ -659,6 +735,9 @@ async function loadConfig() {
     desc.textContent = cfg.AccurateMode
         ? "Accuracy of space saved over speed"
         : "Quick results across your entire library";
+
+    // Detect GPU and apply the saved preference
+    detectGPU(cfg.UseGPU || false);
 
     updateReviewButton();
 }
@@ -1088,7 +1167,8 @@ document.getElementById("startBtn").addEventListener("click", async () => {
 
     startBtn.classList.add("running");
     const workers = parseInt(document.getElementById("workerCount").value) || 4;
-    const result = await apiStart(root, repaired, mode, scanAll, workers);
+    const useGPU  = document.getElementById("useGPU").checked;
+    const result = await apiStart(root, repaired, mode, scanAll, workers, useGPU);
     console.log("Start:", result);
 });
 
@@ -1160,6 +1240,20 @@ document.getElementById("workerCount").addEventListener("input", function () {
     apiSaveConfig();
 });
 
+document.getElementById("useGPU").addEventListener("change", function () {
+    const modalToggle = document.getElementById("compressUseGPU");
+    if (modalToggle) modalToggle.checked = this.checked;
+    updateGpuStatus();
+    apiSaveConfig();
+});
+
+document.getElementById("compressUseGPU").addEventListener("change", function () {
+    const mainToggle = document.getElementById("useGPU");
+    if (mainToggle) mainToggle.checked = this.checked;
+    updateGpuStatus();
+    apiSaveConfig();
+});
+
 document.getElementById("compressWorkerCount").addEventListener("input", function () {
     const val = parseInt(this.value) || 2;
     document.getElementById("compressWorkerValue").textContent = val;
@@ -1168,8 +1262,8 @@ document.getElementById("compressWorkerCount").addEventListener("input", functio
 
 document.getElementById("scanAllEpisodes").addEventListener("change", function () {
     document.getElementById("scanModeDesc").textContent = this.checked
-        ? "Scans every episode - slower but more precise"
-        : "Samples the first episode per season - fast results across large libraries";
+        ? "Scans every episode"
+        : "First episode per season";
     apiSaveConfig();
 });
 
@@ -1635,6 +1729,13 @@ async function showCompressionModal() {
 	document.getElementById("compressWorkerCount").value = 2;
 	document.getElementById("compressWorkerValue").textContent = 2;
 	document.getElementById("compressWorkerDesc").textContent = getCompressWorkerDesc(2);
+
+	// Mirror the current GPU toggle state into the modal
+	const mainGpu  = document.getElementById("useGPU");
+	const modalGpu = document.getElementById("compressUseGPU");
+	if (mainGpu && modalGpu) modalGpu.checked = mainGpu.checked;
+	updateGpuToggleState();
+	updateGpuStatus();
 	
     if (!modal || !tree || !summary) {
         console.error("Compression modal elements not found", { modal, tree, summary });
@@ -1672,7 +1773,6 @@ async function showCompressionModal() {
     const savedMB     = root.origMB - root.estMB;
     const savedPct    = root.origMB > 0 ? ((savedMB / root.origMB) * 100).toFixed(1) : 0;
     summary.innerHTML = `
-        <span style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; display:block;">Summary</span>
         <div class="summary-grid">
             <span class="summary-label">Number of Folders:</span>
             <span class="summary-value" id="sumShows">${folderCount}</span>
@@ -1775,7 +1875,8 @@ document.getElementById("compressionStart").addEventListener("click", async () =
 			paths: selectedPaths,
 			crf: parseInt(document.getElementById("crfSlider").value) || 22,
 			sourceRoot: document.getElementById("rootPath").value.trim(),
-			workers: parseInt(document.getElementById("compressWorkerCount").value) || 2
+			workers: parseInt(document.getElementById("compressWorkerCount").value) || 2,
+			useGPU: document.getElementById("compressUseGPU").checked
 		})
     });
     const result = await res.json();

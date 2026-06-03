@@ -44,16 +44,6 @@
                         </div>
                     </div>
 
-					<div class="toggle-row">
-                        <span class="toggle-label">Quick</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="scanAllEpisodes" />
-                            <span class="toggle-track"></span>
-                        </label>
-                        <span class="toggle-label">Full</span>
-                    </div>
-                    <p id="scanModeDesc" class="smart-desc">Samples the first episode per season - fast results across large libraries</p>
-
 					<div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
                         <div style="display:flex; align-items:center; gap:10px; width:100%;">
                             <span class="toggle-label">Workers</span>
@@ -61,6 +51,31 @@
                             <span id="workerValue" class="toggle-label">4</span>
                         </div>
                         <p id="workerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
+                    </div>
+
+					<div class="toggle-row">
+                        <div class="scan-toggle-group">
+                            <span class="toggle-label">Quick</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="scanAllEpisodes" />
+                                <span class="toggle-track"></span>
+                            </label>
+                            <span class="toggle-label">Full</span>
+                        </div>
+
+                        <div class="gpu-toggle-group">
+                            <span class="toggle-label">CPU</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="useGPU" />
+                                <span class="toggle-track"></span>
+                            </label>
+                            <span class="toggle-label">GPU</span>
+                        </div>
+                    </div>
+
+                    <div class="desc-row">
+                        <p id="scanModeDesc" class="smart-desc">First episode per season</p>
+                        <p id="gpuStatusDesc" class="smart-desc gpu-status">Detecting GPU…</p>
                     </div>
                 </div>
 
@@ -162,7 +177,7 @@
 
         <!-- HEADER -->
         <div class="compression-header">
-            <h2>Compression Results</h2>
+            <h2>Smart Compression Review</h2>
             <button id="compressionClose" class="compression-close">✕</button>
         </div>
 
@@ -171,31 +186,48 @@
 
             <!-- LEFT PANEL -->
             <div class="compression-left">
-				<div class="compression-output-section">
-                    <label class="comp-label">Compressed Root:</label>
-                    <div class="field-row">
-                        <input id="compressionOutputPath" type="text" placeholder="Select output folder..." />
-                        <button id="compressionBrowse" class="btn small">Browse</button>
-                    </div>
-                </div>
-                <div class="toggle-row" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px; margin-bottom:8px;">
-                    <div style="display:flex; align-items:center; gap:10px; width:100%;">
-                        <span class="toggle-label">Workers</span>
-                        <input type="range" id="compressWorkerCount" min="1" max="8" value="2" style="flex:1;" />
-                        <span id="compressWorkerValue" class="toggle-label">2</span>
-                    </div>
-                    <p id="compressWorkerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
-                </div>
-                <div class="compression-summary" id="compressionSummary"></div>
-                <button id="compressionStart" class="btn primary compression-start-btn">Compress</button>
-            </div>
+				<div class="card group">
+					<h2 class="group-title">Options</h2>
+					<div class="compression-output-section">
+						<label class="comp-label">Compressed Root:</label>
+						<div class="field-row">
+							<input id="compressionOutputPath" type="text" placeholder="Select output folder..." />
+							<button id="compressionBrowse" class="btn small">Browse</button>
+						</div>
+					</div>
+					<div class="toggle-row" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px;">
+						<div style="display:flex; align-items:center; gap:10px; width:100%;">
+							<span class="toggle-label">Workers</span>
+							<input type="range" id="compressWorkerCount" min="1" max="8" value="2" style="flex:1;" />
+							<span id="compressWorkerValue" class="toggle-label">2</span>
+						</div>
+						<p id="compressWorkerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
+					</div>
+					<div class="toggle-row gpu-toggle-group-modal" style="margin-top:8px;">
+						<span class="toggle-label">CPU</span>
+						<label class="toggle-switch">
+							<input type="checkbox" id="compressUseGPU" />
+							<span class="toggle-track"></span>
+						</label>
+						<span class="toggle-label">GPU</span>
+					</div>
+					<p id="compressGpuStatusDesc" class="smart-desc" style="margin:2px 0 0 0;"></p>
+				</div>
+
+				<div class="card group" style="margin-top:16px;">
+					<h2 class="group-title">Summary</h2>
+					<div class="compression-summary" id="compressionSummary"></div>
+				</div>
+
+				<button id="compressionStart" class="btn primary compression-start-btn">Compress</button>
+			</div>
 
             <!-- DIVIDER -->
             <div class="compression-divider"></div>
 
 			<!-- RIGHT PANEL: TREE -->
             <div class="compression-right">
-                <div class="compression-tree-wrapper">
+				<div class="card group compression-tree-wrapper">
                     <table id="compressionTree" class="compression-tree">
                         <colgroup>
                             <col id="colName" />

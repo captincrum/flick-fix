@@ -46,6 +46,9 @@ function Load-Config {
             if ($null -eq $cfg.Workers -or $cfg.Workers -lt 1 -or $cfg.Workers -gt 8) {
                 $cfg | Add-Member -NotePropertyName Workers -NotePropertyValue 4 -Force
             }
+            if ($null -eq $cfg.UseGPU) {
+                $cfg | Add-Member -NotePropertyName UseGPU -NotePropertyValue $false
+            }
             return $cfg
         } catch {}
     }
@@ -57,6 +60,7 @@ function Load-Config {
         AccurateMode          = $false
         CompressionOutputPath = ""
         Workers               = 4
+        UseGPU                = $false
     }
 }
 
@@ -110,6 +114,7 @@ function Start-UMPipeline-Core {
 	if ($Settings.ContainsKey('RootPath'))        { $config.RootPath        = $Settings.RootPath }
     if ($Settings.ContainsKey('ScanAllEpisodes')) { $config.ScanAllEpisodes = [bool]$Settings.ScanAllEpisodes }
     if ($Settings.ContainsKey('Workers'))         { $config.Workers         = [int]$Settings.Workers }
+    if ($Settings.ContainsKey('UseGPU'))          { $config.UseGPU          = [bool]$Settings.UseGPU }
 
     # Keep Repair and Compression output paths separate
     if ($Settings.Mode -eq "Compress") {
@@ -170,6 +175,7 @@ function Start-UMPipeline-Core {
         if ($settings -and $settings.RootPath)                        { $cfg | Add-Member -NotePropertyName RootPath         -NotePropertyValue $settings.RootPath                -Force }
         if ($settings -and $null -ne $settings.ScanAllEpisodes)       { $cfg | Add-Member -NotePropertyName ScanAllEpisodes -NotePropertyValue ([bool]$settings.ScanAllEpisodes) -Force }
         if ($settings -and $settings.CrfValue -gt 0)                  { $cfg | Add-Member -NotePropertyName CrfValue         -NotePropertyValue ([int]$settings.CrfValue)         -Force }
+        if ($settings -and $null -ne $settings.UseGPU)                { $cfg | Add-Member -NotePropertyName UseGPU           -NotePropertyValue ([bool]$settings.UseGPU)          -Force }
 
         $Global:IsGUI = $true
         $Global:AppendConsole = {
@@ -186,6 +192,7 @@ function Start-UMPipeline-Core {
         $ctx | Add-Member -NotePropertyName ScanAllEpisodes -NotePropertyValue $cfg.ScanAllEpisodes                              -Force
         $ctx | Add-Member -NotePropertyName AccurateMode    -NotePropertyValue ([bool]$cfg.AccurateMode)                         -Force
         $ctx | Add-Member -NotePropertyName CrfValue        -NotePropertyValue ([int](if ($cfg.CrfValue) { $cfg.CrfValue } else { 22 })) -Force
+        $ctx | Add-Member -NotePropertyName UseGPU          -NotePropertyValue ([bool]$cfg.UseGPU)                                -Force
 
         UM-LogInit
 

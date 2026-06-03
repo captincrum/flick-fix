@@ -12,11 +12,31 @@ function Invoke-UMSmartProbe {
 
     $Context = $Global:Context
 
-    if (-not $Context.RootPath) {
+	if (-not $Context.RootPath) {
         UM-Output "Smart Compression requires a valid root path. Exiting."
         return
     }
 
+    # GPU preflight: verify the hardware encoder can initialize before churning
+    # through the whole library. A too-old driver fails every file identically,
+    # so we test once here and surface one clear, actionable message instead of
+    # hundreds of "SampleEncodeFailed" entries.
+    if ($Context.UseGPU) {
+        $gpuEncoder = UM-ResolveEncoder -BaseCodec "libx265" -UseGPU $true
+        if ($gpuEncoder -match '_(nvenc|amf|qsv)$') {
+            $gpuCrf  = if ($Context.CrfValue -gt 0) { $Context.CrfValue } else { 22 }
+            $gpuArgs = UM-ResolveEncoderArgs -Encoder $gpuEncoder -CRF $gpuCrf
+            $gpuTest = UM-TestGpuEncoder -Encoder $gpuEncoder -EncoderArgs $gpuArgs
+            if (-not $gpuTest.Success) {
+                $explain = UM-ExplainGpuError -Encoder $gpuEncoder -ErrorText $gpuTest.ErrorText
+				UM-Output $explain.Message
+                UM-Output "Smart Compression has stopped."
+                return
+            }
+            UM-Output "GPU encoder check passed ($gpuEncoder). Using GPU for Smart Compression."
+        }
+    }
+	
     $Global:UM_ScanStart     = Get-Date
     $Global:UM_ScannedCount  = 0
     $Global:UM_TotalFiles    = 0
@@ -220,9 +240,12 @@ function Invoke-UMProbeFile {
             SavedPct    = 0
             Confidence  = "N/A"
             SkipReason  = $skipReason
-            Verdict     = "Skip"
-            ProbeMethod = if ($AccurateMode) { "Accurate" } else { "Fast" }
-            ProbedAt    = (Get-Date).ToString("s")
+			Verdict     = $verdict
+			SampleKbps  = @($sampleResults)
+			ProbeMethod = if ($AccurateMode) { "Accurate" } else { "Fast" }
+			EncodeMethod = $encodeMethod
+			Encoder      = $probeEncoder
+			ProbedAt    = (Get-Date).ToString("s")
         }
     }
 
@@ -250,6 +273,8 @@ function Invoke-UMProbeFile {
     # Resolve encoder + quality args once for this probe (GPU or CPU)
     $probeEncoder     = UM-ResolveEncoder -BaseCodec "libx265" -UseGPU $UseGPU
     $probeEncoderArgs = UM-ResolveEncoderArgs -Encoder $probeEncoder -CRF $CrfValue
+    $encodeMethod     = if ($probeEncoder -match '_(nvenc|amf|qsv)$') { "GPU" } else { "CPU" }
+	$encodeError      = $null
 
 	foreach ($seekPoint in $samplePoints) {
 		$passNumber++
@@ -261,20 +286,34 @@ function Invoke-UMProbeFile {
                 Set-Content -Path $StatusFile -Encoding UTF8
         }
 
-        $seek = [math]::Max(0, [math]::Min($seekPoint, [int]$durationSec - 35))
+        $seek           = [math]::Max(0, [math]::Min($seekPoint, [int]$durationSec - 35))
+        $sampleDuration = 30
 
-        $encodeArgs = @("-ss", $seek, "-t", 30, "-i", $FilePath, "-c:v", $probeEncoder) +
+        # Encode a video-only sample to a real temp file, then derive the bitrate
+        # from the resulting file size. This is encoder-agnostic: CPU (libx26x)
+        # encoders print an "encoded N frames ... kb/s" summary line, but hardware
+        # encoders (nvenc/amf/qsv) do not -- parsing that line silently failed for
+        # GPU. Measuring the output file size works identically for both.
+        $sampleFile = Join-Path $env:TEMP ("UMProbe_{0}_{1}_{2}.mp4" -f $WorkerID, $passNumber, (Get-Random))
+
+        $encodeArgs = @("-y", "-ss", $seek, "-t", $sampleDuration, "-i", $FilePath, "-an", "-c:v", $probeEncoder) +
                       $probeEncoderArgs +
-                      @("-c:a", "copy", "-f", "null", "NUL")
+                      @("-loglevel", "error", $sampleFile)
+					  
         $encodeOutput = & ffmpeg @encodeArgs 2>&1
 
-        $summaryLine = $encodeOutput | Select-String "encoded \d+ frames"
-        if ($summaryLine) {
-            $kbsMatch = [regex]::Match($summaryLine.Line, "([\d.]+)\s*kb/s")
-            if ($kbsMatch.Success) {
-                $sampleResults += [double]$kbsMatch.Groups[1].Value
+        if ((Test-Path $sampleFile) -and ((Get-Item $sampleFile).Length -gt 0)) {
+            $sampleBytes = (Get-Item $sampleFile).Length
+            $sampleResults += [math]::Round(($sampleBytes * 8) / 1000 / $sampleDuration, 1)
+        }
+        elseif (-not $encodeError) {
+            $errText = ($encodeOutput | Out-String).Trim()
+            if ($errText) {
+                $encodeError = (($errText -split "`r?`n") | Select-Object -Last 3) -join " | "
             }
         }
+
+        Remove-Item $sampleFile -Force -ErrorAction SilentlyContinue
     }
 
     # ---- No valid sample results ---- #
@@ -294,6 +333,9 @@ function Invoke-UMProbeFile {
             SkipReason  = "SampleEncodeFailed"
             Verdict     = "Skip"
             ProbeMethod = if ($AccurateMode) { "Accurate" } else { "Fast" }
+            EncodeMethod = $encodeMethod
+            Encoder      = $probeEncoder
+            EncodeError  = $encodeError
             ProbedAt    = (Get-Date).ToString("s")
         }
     }
@@ -316,6 +358,8 @@ function Invoke-UMProbeFile {
             SkipReason  = "SampleExceedsSource"
             Verdict     = "Skip"
             ProbeMethod = if ($AccurateMode) { "Accurate" } else { "Fast" }
+            EncodeMethod = $encodeMethod
+            Encoder      = $probeEncoder
             ProbedAt    = (Get-Date).ToString("s")
         }
     }
@@ -374,21 +418,24 @@ function UM-LogSmartProbe {
     param([object]$Result)
 
     $entry = [ordered]@{
-        Type        = "SmartProbe"
-        Path        = $Result.Path
-        Codec       = $Result.Codec
-        Width       = $Result.Width
-        Height      = $Result.Height
-        DurationSec = $Result.DurationSec
-        OriginalMB  = $Result.OriginalMB
-        EstimatedMB = $Result.EstimatedMB
-        SavedMB     = $Result.SavedMB
-        SavedPct    = $Result.SavedPct
-        Confidence  = $Result.Confidence
-        SkipReason  = $Result.SkipReason
-        Verdict     = $Result.Verdict
-        SampleKbps  = $Result.SampleKbps
-        ProbeMethod = $Result.ProbeMethod
+        Type        	= "SmartProbe"
+        Path        	= $Result.Path
+        Codec       	= $Result.Codec
+        Width       	= $Result.Width
+        Height      	= $Result.Height
+        DurationSec 	= $Result.DurationSec
+        OriginalMB  	= $Result.OriginalMB
+        EstimatedMB 	= $Result.EstimatedMB
+        SavedMB     	= $Result.SavedMB
+        SavedPct    	= $Result.SavedPct
+        Confidence  	= $Result.Confidence
+        SkipReason  	= $Result.SkipReason
+        Verdict     	= $Result.Verdict
+        SampleKbps  	= $Result.SampleKbps
+        ProbeMethod 	= $Result.ProbeMethod
+        EncodeMethod = $Result.EncodeMethod
+        Encoder      = $Result.Encoder
+        EncodeError  = $Result.EncodeError
         Timestamp   = $Result.ProbedAt
     }
 

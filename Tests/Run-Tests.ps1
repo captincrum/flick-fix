@@ -163,7 +163,7 @@ Test-Case "Full returns 'Full'" {
 }
 
 Test-Case "Unknown mode returns the input value" {
-    (UM-PrettyMode "SmartCompression") -eq "SmartCompression"
+    (UM-PrettyMode "SmartCompression") -eq "Smart Compression"
 }
 
 # ============================================================
@@ -714,6 +714,35 @@ Test-Case "Both encoder functions are exported from Common" {
     ($mod.ExportedFunctions.Keys -contains "UM-ResolveEncoderArgs")
 }
 
+Test-Case "UM-TestGpuEncoder exists and is exported from Common" {
+    ($null -ne (Get-Command "UM-TestGpuEncoder" -ErrorAction SilentlyContinue)) -and
+    ((Get-Module Common).ExportedFunctions.Keys -contains "UM-TestGpuEncoder")
+}
+
+. (Join-Path $moduleRoot "UM-Errors.ps1")
+
+Test-Case "UM-Errors catalog has GpuEncoderInitFailed" {
+    $Global:UM_ErrorCatalog.ContainsKey("GpuEncoderInitFailed")
+}
+
+Test-Case "UM-ExplainGpuError function exists" {
+    $null -ne (Get-Command "UM-ExplainGpuError" -ErrorAction SilentlyContinue)
+}
+
+Test-Case "UM-ExplainGpuError surfaces the ffmpeg driver lines and drops noise" {
+    $sample = @"
+[vost#0:0/hevc_nvenc] Driver does not support the required nvenc API version. Required: 13.0 Found: 12.2
+[hevc_nvenc] The minimum required Nvidia driver for nvenc is 570.0 or newer
+[vost#0:0/hevc_nvenc] Terminating thread with return code -22 (Invalid argument)
+"@
+    $r = UM-ExplainGpuError -Encoder "hevc_nvenc" -ErrorText $sample
+    ($r.Message -match "570.0 or newer") -and ($r.Message -match "Required: 13.0") -and ($r.Message -notmatch "Terminating thread")
+}
+
+Test-Case "UM-ExplainGpuError offers the CPU fallback option" {
+    (UM-ExplainGpuError -Encoder "hevc_nvenc" -ErrorText "driver too old").Message -match "(?i)CPU"
+}
+
 Test-Case "UM-ResolveEncoder returns libx264 unchanged when GPU off" {
     (UM-ResolveEncoder -BaseCodec "libx264" -UseGPU $false) -eq "libx264"
 }
@@ -827,6 +856,55 @@ Test-Case "SmartCompression resolves encoder in probe and compress" {
 
 Test-Case "SmartCompression no longer hardcodes -c:v libx265 -crf" {
     -not ($scContent -match '"libx265", "-crf"')
+}
+
+Test-Case "Probe encodes a video-only sample to a temp file" {
+    ($scContent -match '"-an"') -and ($scContent -match 'UMProbe_')
+}
+
+Test-Case "Probe no longer encodes samples to the null muxer" {
+    -not ($scContent -match '"-f", "null"')
+}
+
+Test-Case "Probe derives sample bitrate from output file size" {
+    $scContent -match '\$sampleBytes'
+}
+
+Test-Case "Probe records EncodeMethod from the resolved encoder" {
+    ($scContent -match 'EncodeMethod\s*=\s*\$encodeMethod') -and
+    ($scContent -match '_\(nvenc\|amf\|qsv\)\$')
+}
+
+Test-Case "UM-LogSmartProbe persists EncodeMethod and Encoder" {
+    ($scContent -match 'EncodeMethod\s*=\s*\$Result\.EncodeMethod') -and
+    ($scContent -match 'Encoder\s*=\s*\$Result\.Encoder')
+}
+
+Test-Case "Probe captures ffmpeg error text on sample-encode failure" {
+    ($scContent -match '\$encodeError') -and
+    ($scContent -match 'EncodeError\s*=\s*\$encodeError')
+}
+
+$commonContent = Get-Content (Join-Path $moduleRoot "Common.psm1") -Raw
+
+Test-Case "GPU preflight uses a log level that captures driver warnings" {
+    $commonContent -match '"-loglevel", "verbose"'
+}
+
+Test-Case "UM-TestGpuEncoder uses a synthetic source and discards output" {
+    ($commonContent -match 'testsrc') -and ($commonContent -match '"-f", "null"')
+}
+
+Test-Case "SmartCompression runs a GPU preflight before probing" {
+    ($scContent -match 'UM-TestGpuEncoder') -and ($scContent -match 'UM-ExplainGpuError')
+}
+
+Test-Case "GPU preflight only runs when GPU is requested" {
+    $scContent -match 'if \(\$Context\.UseGPU\)'
+}
+
+Test-Case "Probe job loads UM-Errors so the GPU explainer is available" {
+    $guiCoreContent -match 'UM-Errors\.ps1'
 }
 
 # ============================================================

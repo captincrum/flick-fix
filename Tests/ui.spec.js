@@ -1080,22 +1080,17 @@ test.describe('GPU Encoding Toggle', () => {
         expect(json.config).toHaveProperty('UseGPU');
     });
 
-	// Skip ALL GPU‑dependent tests in CI (GitHub Actions has no GPU)
-	test.skip(process.env.CI, 'Skipping GPU tests in CI: no GPU available');
-
-	// GPU status text test
+/*	test.skip(process.env.CI, 'Skipping GPU tests in CI: no GPU available'); */
 	test('GPU status text resolves after detection (GPU Encoding Toggle)', async ({ page }) => {
+	  test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
 	  await waitForDetection(page);
 	  const text = (await page.locator('#gpuStatusDesc').textContent()).trim();
-	  // CPU selected: empty string; GPU selected: "NVIDIA detected" etc.
 	  expect(text === '' || text.includes('detected')).toBe(true);
 	});
-
-	// GPU toggle test
 	test('GPU toggle enabled state matches detection result (GPU Encoding Toggle)', async ({ page }) => {
+	  test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
 	  await waitForDetection(page);
 	  const status = await page.locator('#gpuStatusDesc').textContent();
-
 	  if (status.includes('No compatible GPU')) {
 		await expect(page.locator('#useGPU')).toBeDisabled();
 		await expect(page.locator('.gpu-toggle-group')).toHaveClass(/disabled-ui/);
@@ -1103,14 +1098,13 @@ test.describe('GPU Encoding Toggle', () => {
 		await expect(page.locator('#useGPU')).toBeEnabled();
 	  }
 	});
-
     test('GPU toggle is disabled in Scan Only mode', async ({ page }) => {
         await waitForDetection(page);
         await selectMode(page, 'ScanOnly');
         await expect(page.locator('#useGPU')).toBeDisabled();
     });
-
     test('Changing the settings GPU toggle syncs the modal toggle', async ({ page }) => {
+        test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
         await waitForDetection(page);
         await page.evaluate(() => {
             const m = document.getElementById('useGPU');
@@ -1125,8 +1119,8 @@ test.describe('GPU Encoding Toggle', () => {
         });
         await expect(page.locator('#compressUseGPU')).not.toBeChecked();
     });
-
     test('Changing the modal GPU toggle syncs the settings toggle', async ({ page }) => {
+        test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
         await waitForDetection(page);
         await page.evaluate(() => {
             const m = document.getElementById('compressUseGPU');
@@ -1135,7 +1129,6 @@ test.describe('GPU Encoding Toggle', () => {
         });
         await expect(page.locator('#useGPU')).toBeChecked();
     });
-
     test('GPU preference persists through /config/save round-trip', async ({ page }) => {
         await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false&useGPU=true`);
         const res = await page.request.get(`${BASE_URL}/config`);

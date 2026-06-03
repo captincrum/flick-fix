@@ -168,6 +168,10 @@ function Start-UMPipeline-Core {
         foreach ($m in $modules) {
             Import-Module (Join-Path $moduleRoot $m) -Force
         }
+		
+		# UM-Errors.ps1 is a plain script (not a module), so it must be dot-sourced
+        # into the job runspace to make the error catalog + GPU explainer available.
+        . (Join-Path $moduleRoot "UM-Errors.ps1")
 
         # GUI-style output router - emit console messages as structured objects
         # Override cfg with live settings values passed from UI

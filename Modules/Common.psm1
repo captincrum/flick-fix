@@ -52,11 +52,12 @@ function UM-PrettyMode {
     param([string]$Mode)
 
     switch ($Mode) {
-        "ScanOnly"    { return "Scan Only" }
-        "RepairOnly"  { return "Repair Only" }
-        "QualityOnly" { return "Quality Only" }
-        "Full"        { return "Full" }
-        default       { return $Mode }
+        "ScanOnly"    			{ return "Scan Only" }
+        "RepairOnly"  			{ return "Repair Only" }
+        "QualityOnly" 			{ return "Quality Only" }
+        "Full"        			{ return "Full" }
+        "SmartCompression"    	{ return "Smart Compression" }
+        default       			{ return $Mode }
     }
 }
 
@@ -164,6 +165,32 @@ function UM-ResolveEncoderArgs {
         "*_amf"   { return @("-quality", "quality", "-qp_i", $q, "-qp_p", $q) }
         "*_qsv"   { return @("-global_quality", $q, "-preset", "medium") }
         default   { return @("-crf", $q) }
+    }
+}
+
+function UM-TestGpuEncoder {
+    param(
+        [Parameter(Mandatory=$true)][string]$Encoder,
+        [string[]]$EncoderArgs = @()
+    )
+
+    $testArgs = @(
+        "-hide_banner", "-loglevel", "verbose",
+        "-f", "lavfi", "-i", "testsrc=size=256x256:rate=15:duration=1",
+        "-an", "-pix_fmt", "yuv420p", "-c:v", $Encoder
+    ) + $EncoderArgs + @("-f", "null", "NUL")
+
+    $errText = ""
+    try {
+        $errText = (& ffmpeg @testArgs 2>&1 | Out-String).Trim()
+    } catch {
+        $errText = $_.Exception.Message
+    }
+
+    return [pscustomobject]@{
+        Success   = ($LASTEXITCODE -eq 0)
+        Encoder   = $Encoder
+        ErrorText = $errText
     }
 }
 
@@ -464,4 +491,5 @@ Export-ModuleMember -Function `
     UM-LibraryType, `
     UM-ResolveEncoder, `
     UM-ResolveEncoderArgs, `
+    UM-TestGpuEncoder, `
     Invoke-UMWorkerPool

@@ -773,8 +773,84 @@ Test-Case "UM-ExplainGpuError offers the CPU fallback option" {
     (UM-ExplainGpuError -Encoder "hevc_nvenc" -ErrorText "driver too old").Message -match "(?i)CPU"
 }
 
+Test-Case "UM-ThrowError returns a full object shape for an unknown code" {
+    $r = UM-ThrowError -Code "NoSuchCode"
+    ($r.Code -eq 9999) -and ($r.Severity -eq "Error") -and ($r.Message -match "Unknown error code")
+}
+Test-Case "UM-ThrowError flags a malformed catalog entry instead of returning blank fields" {
+    $Global:UM_ErrorCatalog["__TestMalformed"] = @{ Code = 1; Severity = "Error" }  # deliberately missing Message
+    $r = UM-ThrowError -Code "__TestMalformed"
+    $Global:UM_ErrorCatalog.Remove("__TestMalformed")
+    ($r.Message -match "Malformed") -and ($r.Code -eq 9998)
+}
 Test-Case "UM-ResolveEncoder returns libx264 unchanged when GPU off" {
     (UM-ResolveEncoder -BaseCodec "libx264" -UseGPU $false) -eq "libx264"
+}
+
+# ---- Show-root resolution (Plex layouts) ---- #
+
+Test-Case "UM-IsSeasonFolder matches Plex season and specials names" {
+    (UM-IsSeasonFolder "Season 01") -and (UM-IsSeasonFolder "season1") -and
+    (UM-IsSeasonFolder "S01") -and (UM-IsSeasonFolder "Season 00") -and (UM-IsSeasonFolder "Specials")
+}
+Test-Case "UM-IsSeasonFolder matches date-based 'Season YYYY' and bare year folders" {
+    (UM-IsSeasonFolder "Season 2013") -and (UM-IsSeasonFolder "2013") -and (UM-IsSeasonFolder "1999")
+}
+Test-Case "UM-IsSeasonFolder rejects show-style names" {
+    (-not (UM-IsSeasonFolder "Goosebumps")) -and
+    (-not (UM-IsSeasonFolder "Breaking Bad (2008)")) -and (-not (UM-IsSeasonFolder "Extras"))
+}
+Test-Case "UM-IsSeasonFolder rejects out-of-range numbers that aren't years" {
+    (-not (UM-IsSeasonFolder "123")) -and (-not (UM-IsSeasonFolder "20135"))
+}
+
+Test-Case "UM-GetShowRoot returns the root itself when the root is a single show" {
+    (UM-GetShowRoot -FilePath "D:\Shows\Goosebumps\Season 02\S02E01.mkv" -RootPath "D:\Shows\Goosebumps" -RootIsSingleShow $true) -eq "D:\Shows\Goosebumps"
+}
+Test-Case "UM-GetShowRoot returns the show folder under a multi-show library (season subfolders)" {
+    (UM-GetShowRoot -FilePath "D:\Shows\Goosebumps\Season 02\S02E01.mkv" -RootPath "D:\Shows" -RootIsSingleShow $false) -eq "D:\Shows\Goosebumps"
+}
+Test-Case "UM-GetShowRoot returns the show folder under a multi-show library (flat episodes)" {
+    (UM-GetShowRoot -FilePath "D:\Shows\Goosebumps\S02E01.mkv" -RootPath "D:\Shows" -RootIsSingleShow $false) -eq "D:\Shows\Goosebumps"
+}
+Test-Case "UM-GetShowRoot resolves a date-based show in a multi-show library" {
+    (UM-GetShowRoot -FilePath "D:\Shows\Pawn Stars\2013\Pawn Stars - 2013-01-07.mkv" -RootPath "D:\Shows" -RootIsSingleShow $false) -eq "D:\Shows\Pawn Stars"
+}
+Test-Case "UM-GetShowRoot ignores a trailing slash on the root" {
+    (UM-GetShowRoot -FilePath "D:\Shows\Goosebumps\Season 02\S02E01.mkv" -RootPath "D:\Shows\" -RootIsSingleShow $false) -eq "D:\Shows\Goosebumps"
+}
+
+Test-Case "UM-RootIsSingleShow detects a single show with season folders" {
+    $tmp = Join-Path $env:TEMP ("UMRoot_" + [guid]::NewGuid())
+    New-Item -ItemType Directory -Path (Join-Path $tmp "Season 01") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $tmp "Specials")  -Force | Out-Null
+    $r = UM-RootIsSingleShow -RootPath $tmp
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    $r -eq $true
+}
+Test-Case "UM-RootIsSingleShow detects a date-based single show with year folders" {
+    $tmp = Join-Path $env:TEMP ("UMRoot_" + [guid]::NewGuid())
+    New-Item -ItemType Directory -Path (Join-Path $tmp "2013") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $tmp "2014") -Force | Out-Null
+    $r = UM-RootIsSingleShow -RootPath $tmp
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    $r -eq $true
+}
+Test-Case "UM-RootIsSingleShow detects a single show with loose episodes" {
+    $tmp = Join-Path $env:TEMP ("UMRoot_" + [guid]::NewGuid())
+    New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+    Set-Content -Path (Join-Path $tmp "S01E01.mkv") -Value "x"
+    $r = UM-RootIsSingleShow -RootPath $tmp
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    $r -eq $true
+}
+Test-Case "UM-RootIsSingleShow detects a multi-show library" {
+    $tmp = Join-Path $env:TEMP ("UMRoot_" + [guid]::NewGuid())
+    New-Item -ItemType Directory -Path (Join-Path $tmp "Goosebumps")          -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $tmp "Breaking Bad (2008)") -Force | Out-Null
+    $r = UM-RootIsSingleShow -RootPath $tmp
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    $r -eq $false
 }
 
 Test-Case "UM-ResolveEncoder returns libx265 unchanged when GPU off" {

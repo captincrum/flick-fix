@@ -100,107 +100,6 @@ function Get-UMFilesToScan {
 }
 
 # =====================================================================
-# WORKER: Scans a single file, writes result to a temp file
-# =====================================================================
-function Invoke-UMScanWorker {
-    param(
-        [int]   $WorkerID,
-        [string]$FilePath,
-        [string]$Library,
-        [string]$TempDir,
-        [string]$StatusFile   # worker writes its current folder here
-    )
-
-    # Update status file so the main job can report which folder this worker is on
-    $folderName = Split-Path (Split-Path $FilePath -Parent) -Leaf
-    $statusEntry = @{ WorkerID = $WorkerID; Folder = $folderName } | ConvertTo-Json -Compress
-    [System.IO.File]::WriteAllText($StatusFile, $statusEntry)
-
-    $errors = Invoke-UMScanFile -FilePath $FilePath
-
-    $result = [ordered]@{
-        Path      = $FilePath
-        Library   = $Library
-        Errors    = $errors
-        ScannedAt = (Get-Date).ToString("s")
-        NeedsRepair = ($errors.Count -gt 0)
-    }
-
-    # Append result to this worker's temp file (one JSON line per result)
-    $json = $result | ConvertTo-Json -Compress -Depth 5
-    $tmpFile = Join-Path $TempDir "Worker_$WorkerID.tmp"
-    Add-Content -Path $tmpFile -Value ($json + "`n")
-}
-
-# =====================================================================
-# SHOW ESCALATION (single-threaded, called after parallel scan)
-# =====================================================================
-function Invoke-UMShowEscalation {
-    param(
-        [object]$Context,
-        [System.IO.FileInfo]$File,
-        [ref]$ScanLog,
-        [ref]$RunningTotal
-    )
-
-    if ($Context.LibraryType -ne "Shows" -or $Context.ScanAllEpisodes) {
-        return
-    }
-
-    $videoExtensions = UM-VideoExtensions
-    $showDir = Split-Path $File.FullName -Parent
-
-    $allEpisodes = Get-ChildItem -Path $showDir -Recurse -File -Include $videoExtensions |
-                   Sort-Object Name
-
-    $newEpisodes = $allEpisodes | Where-Object {
-        -not (UM-IsScanned -Path $_.FullName -ScanLog $ScanLog.Value)
-    }
-
-    $RunningTotal.Value += $newEpisodes.Count
-    $Global:UM_TotalFiles = $RunningTotal.Value
-
-    foreach ($ep in $allEpisodes) {
-
-        if (UM-IsScanned -Path $ep.FullName -ScanLog $ScanLog.Value) {
-            continue
-        }
-
-        $epErrors = Invoke-UMScanFile -FilePath $ep.FullName
-
-        $entry = [PSCustomObject]@{
-            Path      = $ep.FullName
-            Library   = $Context.LibraryType
-            Errors    = $epErrors
-            ScannedAt = (Get-Date).ToString("s")
-        }
-
-        $ScanLog.Value += $entry
-
-        UM-LogScan `
-            -Path      $entry.Path `
-            -Library   $entry.Library `
-            -Errors    $entry.Errors
-
-        if ($epErrors.Count -gt 0) {
-            UM-LogToRepair `
-                -Path         $entry.Path `
-                -Library      $entry.Library `
-                -Errors       $entry.Errors `
-                -RepairStatus "Pending" `
-                -AddedAt      (Get-Date).ToString("s")
-        }
-
-        $Global:UM_ScanFile     = $ep.FullName
-        $Global:UM_ScannedCount = $ScanLog.Value.Count
-        $Global:UM_ScanTotal    = $RunningTotal.Value
-        $Global:UM_Mode         = $Context.Mode
-
-        UM-PhaseTwoConsole
-    }
-}
-
-# =====================================================================
 # MAIN SCAN FUNCTION
 # =====================================================================
 function Invoke-UMScan {
@@ -271,6 +170,7 @@ function Invoke-UMScan {
     $Global:UM_ScanCount      = $scannedFiles
     $Global:UM_ScanTotal2     = $totalFiles
     $Global:UM_EscalatedShows = @{}
+	$Global:UM_RootIsSingleShow = UM-RootIsSingleShow -RootPath $Context.RootPath
     $Global:UM_ScanTempDir    = Join-Path (Split-Path $Global:UnifiedMachineLogPath -Parent) "ScanTemp"
 
     $scanWorkScript = {
@@ -305,34 +205,8 @@ function Invoke-UMScan {
                 -AddedAt      (Get-Date).ToString("s")
 
             if ($Global:Context.LibraryType -eq "Shows" -and -not $Global:Context.ScanAllEpisodes) {
-
-                $showDirFull = Split-Path $result.Path -Parent
-
-                if (-not $Global:UM_EscalatedShows.ContainsKey($showDirFull)) {
-                    $Global:UM_EscalatedShows[$showDirFull] = $true
-
-                    $videoExtensions = UM-VideoExtensions
-                    $allEpisodes     = Get-ChildItem -Path $showDirFull -Recurse -File -Include $videoExtensions |
-                                       Sort-Object Name
-
-                    $newEpisodes = $allEpisodes | Where-Object {
-                        -not (UM-IsScanned -Path $_.FullName -ScanLog $Global:UM_ScanLog)
-                    }
-
-                    if ($newEpisodes.Count -gt 0) {
-                        $Global:UM_ScanTotal2  += $newEpisodes.Count
-                        $Global:UM_TotalFiles   = $Global:UM_ScanTotal2
-
-                        $queuePath = Join-Path $Global:UM_ScanTempDir "Queue.json"
-                        $queueRaw = Get-Content $queuePath -Raw -ErrorAction SilentlyContinue
-                        $currentQueue = @()
-                        if ($queueRaw -and $queueRaw.Trim() -ne "" -and $queueRaw.Trim() -ne "null") {
-                            try { $currentQueue = $queueRaw | ConvertFrom-Json } catch { }
-                        }
-                        $merged = @($currentQueue) + @($newEpisodes | ForEach-Object { $_.FullName })
-                        $merged | ConvertTo-Json -Depth 2 | Set-Content $queuePath -Encoding UTF8
-                    }
-                }
+                $showRoot = UM-GetShowRoot -FilePath $result.Path -RootPath $Global:Context.RootPath -RootIsSingleShow $Global:UM_RootIsSingleShow
+                $Global:UM_EscalatedShows[$showRoot] = $true
             }
         }
 
@@ -355,6 +229,66 @@ function Invoke-UMScan {
         -Extra      @{ Library = $Context.LibraryType } `
         -OnResult   $onResult `
         -OnProgress $onProgress
+
+    # -------------------[ Escalation pass: full scan of flagged shows ]------- #
+    # Any show whose sampled (first) episode reported an error gets every
+    # remaining episode scanned here, after the first pass has fully drained.
+    # This avoids the race where a worker exits before the live queue is topped
+    # up, and it covers the whole show regardless of season-folder nesting.
+    if ($Global:UM_EscalatedShows.Count -gt 0) {
+
+        $videoExtensions = UM-VideoExtensions
+
+        $scannedNow = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($e in $Global:UM_ScanLog) { $null = $scannedNow.Add($e.Path) }
+
+        $escalationFiles = foreach ($showRoot in $Global:UM_EscalatedShows.Keys) {
+            Get-ChildItem -Path $showRoot -Recurse -File -Include $videoExtensions |
+                Where-Object { -not $scannedNow.Contains($_.FullName) }
+        }
+        $escalationFiles = @($escalationFiles | Sort-Object FullName)
+
+        if ($escalationFiles.Count -gt 0) {
+
+            $Global:UM_ScanTotal2 += $escalationFiles.Count
+            $Global:UM_TotalFiles  = $Global:UM_ScanTotal2
+
+            # Same logging/repair-queue handling as pass 1, but NO further
+            # escalation -- we are already scanning the whole show.
+            $onResultEscalation = {
+                param($result)
+
+                $Global:UM_ScanLog += $result
+                $Global:UM_ScanCount++
+
+                UM-LogScan -Path $result.Path -Library $result.Library -Errors $result.Errors
+
+                if ($result.NeedsRepair) {
+                    UM-LogToRepair `
+                        -Path         $result.Path `
+                        -Library      $result.Library `
+                        -Errors       $result.Errors `
+                        -RepairStatus "Pending" `
+                        -AddedAt      (Get-Date).ToString("s")
+                }
+
+                $Global:UM_ScannedCount = $Global:UM_ScanCount
+                $Global:UM_ScanTotal    = $Global:UM_ScanTotal2
+                $Global:UM_Mode         = $Global:Context.Mode
+            }
+
+            Invoke-UMWorkerPool `
+                -Files      $escalationFiles `
+                -Workers    $Context.Workers `
+                -TempDir    $Global:UM_ScanTempDir `
+                -ModuleRoot $moduleRoot `
+                -Modules    @("Common.psm1", "Logging.psm1", "Scan.psm1") `
+                -WorkScript $scanWorkScript `
+                -Extra      @{ Library = $Context.LibraryType } `
+                -OnResult   $onResultEscalation `
+                -OnProgress $onProgress
+        }
+    }
 
     # ---- Final progress emit ---- #
     $Global:UM_ScannedCount  = $Global:UM_ScanTotal2

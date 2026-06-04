@@ -2,50 +2,12 @@
 
 $Global:UM_ErrorCatalog = @{
 
-    # ---- Input validation ---- #
-
-    LibraryRootNotFound = @{
-        Code     = 1001
-        Severity = "Error"
-        Message  = 'ERROR: The path for "Library Root" was not found.'
-    }
-
-    RepairedPathNotFound = @{
-        Code     = 1002
-        Severity = "Error"
-        Message  = 'ERROR: The path for "Repaired Output" was not found.'
-    }
-
-    EmptyLibrary = @{
-        Code     = 1003
-        Severity = "Warning"
-        Message  = 'No video files found in the selected library root.'
-    }
-
-    InvalidMode = @{
-        Code     = 1004
-        Severity = "Error"
-        Message  = 'ERROR: Invalid pipeline mode specified.'
-    }
-
-    CompressionOutputMissing = @{
-        Code     = 1005
-        Severity = "Error"
-        Message  = 'ERROR: A Compressed Output path is required before compressing.'
-    }
-
     # ---- Pipeline ---- #
 
     PipelineInitFailure = @{
         Code     = 2001
         Severity = "Error"
         Message  = 'ERROR: Pipeline job did not initialize correctly.'
-    }
-
-    PipelineAlreadyRunning = @{
-        Code     = 2002
-        Severity = "Warning"
-        Message  = 'A pipeline job is already running. Cancel it before starting a new one.'
     }
 
     PipelineCancelFailed = @{
@@ -102,12 +64,6 @@ $Global:UM_ErrorCatalog = @{
 
     # ---- Compression ---- #
 
-    CompressionQueueEmpty = @{
-        Code     = 5001
-        Severity = "Warning"
-        Message  = 'No files are queued for compression. Run a Smart Compression probe first.'
-    }
-
     CompressionFailed = @{
         Code     = 5002
         Severity = "Error"
@@ -128,12 +84,28 @@ function UM-ThrowError {
 
     if (-not $Global:UM_ErrorCatalog.ContainsKey($Code)) {
         return [pscustomobject]@{
-            Type    = "Console"
-            Message = "Unknown error code: $Code"
+            Type     = "Console"
+            Code     = 9999
+            Severity = "Error"
+            Message  = "Unknown error code: $Code"
         }
     }
 
-    $err     = $Global:UM_ErrorCatalog[$Code]
+    $err = $Global:UM_ErrorCatalog[$Code]
+
+    # Guard against a catalog entry missing a required key, so a typo while
+    # hand-editing the catalog surfaces loudly instead of returning blank fields.
+    foreach ($key in @("Code", "Severity", "Message")) {
+        if (-not $err.ContainsKey($key)) {
+            return [pscustomobject]@{
+                Type     = "Console"
+                Code     = 9998
+                Severity = "Error"
+                Message  = "Malformed error catalog entry '$Code': missing '$key'."
+            }
+        }
+    }
+
     $message = if ($Detail) { "$($err.Message) $Detail" } else { $err.Message }
 
     return [pscustomobject]@{

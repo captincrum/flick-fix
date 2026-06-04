@@ -279,6 +279,59 @@ function UM-GetRepairedOutputPath {
     }
 }
 
+function UM-IsSeasonFolder {
+    param([Parameter(Mandatory)][string]$Name)
+
+    # Plex's accepted season/specials folder spellings.
+    return (
+        $Name -match '^season[\s_]*\d{1,4}$' -or   # "Season 01", "Season 1", "Season 00", "season1"
+        $Name -match '^s\d{1,4}$'            -or   # "S01", "S1"
+        $Name -match '^specials$'            -or   # "Specials"
+		$Name -match '^(19|20)\d{2}$'              # bare year folder: 1900-2099
+    )
+}
+
+function UM-RootIsSingleShow {
+    param([Parameter(Mandatory)][string]$RootPath)
+
+    $subDirs = @(Get-ChildItem -Path $RootPath -Directory -ErrorAction SilentlyContinue)
+
+    # Loose episodes directly in the root, or a season/specials folder sitting
+    # directly under the root, both mean the root itself is one show. Otherwise
+    # the immediate children are show folders (a library of shows).
+    if ($subDirs.Count -eq 0) { return $true }
+    foreach ($d in $subDirs) {
+        if (UM-IsSeasonFolder $d.Name) { return $true }
+    }
+    return $false
+}
+
+function UM-GetShowRoot {
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string]$RootPath,
+        [bool]$RootIsSingleShow = $false
+    )
+
+    $root = $RootPath.TrimEnd('\', '/')
+
+    # The root IS the show -> escalation recurses the whole root.
+    if ($RootIsSingleShow) { return $root }
+
+    # Library of shows -> the show is the first folder beneath the root,
+    # regardless of any season sub-folders inside it.
+    if ($FilePath.Length -le $root.Length -or
+        -not $FilePath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $root
+    }
+
+    $rel      = $FilePath.Substring($root.Length).TrimStart('\', '/')
+    $firstSeg = ($rel -split '[\\/]', 2)[0]
+    if ([string]::IsNullOrEmpty($firstSeg)) { return $root }
+
+    return (Join-Path $root $firstSeg)
+}
+
 function Invoke-UMWorkerPool {
     param(
         [object[]]  $Files,
@@ -492,4 +545,7 @@ Export-ModuleMember -Function `
     UM-ResolveEncoder, `
     UM-ResolveEncoderArgs, `
     UM-TestGpuEncoder, `
+    UM-IsSeasonFolder, `
+    UM-RootIsSingleShow, `
+    UM-GetShowRoot, `
     Invoke-UMWorkerPool

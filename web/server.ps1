@@ -270,7 +270,10 @@ while ($true) {
 			# ------------------[ VALIDATION: Library Root ]------------------ #
 			if (-not $settings.RootPath -or -not (Test-Path $settings.RootPath)) {
 				$Global:UM_Status       = "error"
-				$Global:UM_LatestStatus = UM-ThrowError -Code "LibraryRootNotFound"
+				$Global:UM_LatestStatus = [pscustomobject]@{
+					Type    = "Console"
+					Message = 'ERROR: The path for "Library Root" was not found.'
+				}
 
 				Send-Json $response @{ ok = $false }
 				continue
@@ -280,7 +283,10 @@ while ($true) {
 			$skipRepairedCheck = $settings.Mode -in @("ScanOnly", "SmartCompression")
 			if (-not $skipRepairedCheck -and -not (Test-Path $settings.RepairedPath)) {
 				$Global:UM_Status       = "error"
-				$Global:UM_LatestStatus = UM-ThrowError -Code "RepairedPathNotFound"
+				$Global:UM_LatestStatus = [pscustomobject]@{
+					Type    = "Console"
+					Message = 'ERROR: The path for "Repaired Output" was not found.'
+				}
 
 				Send-Json $response @{ ok = $false }
 				continue

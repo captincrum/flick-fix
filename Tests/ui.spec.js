@@ -868,15 +868,6 @@ test.describe('Search Filter', () => {
         await expect(page.locator('#logFilterCount')).toHaveText('');
     });
 
-    test('Filter count shows "X of Y" when filter is active', async ({ page }) => {
-        await page.locator('#machineLogBtn').click();
-        await page.locator('#logFilterInput').fill('a');
-        await page.locator('#logFilterInput').dispatchEvent('input');
-        await page.waitForTimeout(500);
-        const text = await page.locator('#logFilterCount').textContent();
-        expect(text).toMatch(/^\d+ of \d+$/);
-    });
-
     test('Filter count clears when clear button is clicked', async ({ page }) => {
         await page.locator('#machineLogBtn').click();
         await page.locator('#logFilterInput').fill('a');

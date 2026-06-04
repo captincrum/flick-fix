@@ -369,8 +369,7 @@ input[type="text"] {
     align-items: center;
     gap: 6px;
     flex: 1 1 0;
-    min-width: 0;
-    max-width: 50%;
+    max-width: 65%;
     overflow: hidden;
     padding: 5px 5px;
     transition: opacity 1.0s cubic-bezier(0, 0, 0.58, 1);
@@ -404,6 +403,7 @@ input[type="text"] {
     color: var(--text-muted);
     white-space: nowrap;
     flex-shrink: 0;
+	order: -1;
 }
 
 /* ------------------------[ UI: Smart Compression options ]---------------------- */

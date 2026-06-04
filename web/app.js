@@ -257,6 +257,11 @@ function padElapsed(str) {
     return str;
 }
 
+function fmtNum(n) {
+	const v = Number(n);
+    return Number(n || 0).toLocaleString("en-US");
+}
+
 /* ------------------------[          Log rendering helpers     ]------------------------ */
 
 let currentEntries = [];
@@ -397,7 +402,7 @@ function getCompressWorkerDesc(n) {
 function renderCompressConsole(s) {
     const consoleEl = document.getElementById("consoleOutput");
     const workers   = s.WorkerFolders || [];
-    const pct       = s.TotalItems > 0 ? Math.round((s.ItemIndex / s.TotalItems) * 100) : 0;
+    const pct       = s.TotalItems > 0 ? Math.floor((s.ItemIndex / s.TotalItems) * 100) : 0;
 
     let workerLines = "";
 		const workerDisplayCount = parseInt(document.getElementById("compressWorkerCount").value) || 2;
@@ -427,14 +432,15 @@ function renderCompressConsole(s) {
 
         let progressStr;
         if (estMB > 0 && curMB <= estMB) {
-            const pct = Math.round((curMB / estMB) * 100);
+            const pct = Math.floor((curMB / estMB) * 100);
             progressStr = `~${pct}% (${fmtSize(curMB)} of ~${fmtSize(estMB)})`;
         } else if (estMB > 0 && curMB > estMB) {
             progressStr = `${fmtSize(curMB)} of ~${fmtSize(estMB)}`;
         } else {
             progressStr = `0MB of ~${fmtSize(estMB)}`;
         }
-        const speedStr = speed > 0 ? `${speed}MB/s` : "0MB/s";
+        const speedKBs = Math.round(speed * 1024);
+		const speedStr = speed > 0 ? `${fmtNum(speedKBs)}KB/s` : "0KB/s";
 
         workerLines += `${workerLabel} : ${w.Folder || "--"}\n`;
         workerLines += `${"  File".padEnd(10, " ")} : ${w.Episode || "--"}\n`;
@@ -447,7 +453,7 @@ function renderCompressConsole(s) {
     block += "Phase 3    : Compressing Files\n";
     block += `Mode       : Smart Compression\n`;
     block += `Elapsed    : ${padElapsed(s.Elapsed)}\n`;
-    block += `Compressed : ${s.ItemIndex} / ${s.TotalItems}\n`;
+    block += `Compressed : ${fmtNum(s.ItemIndex)} / ${fmtNum(s.TotalItems)}\n`;
     block += `Completion : ${pct}%\n`;
     block += `CRF        : ${s.CRF}\n`;
     block += "----------------------------------------\n";
@@ -506,7 +512,7 @@ function renderRepairConsole() {
     block += "Phase 3          : Repairing & Logging\n";
     block += `Mode             : ${s.Mode || "Repair"}\n`;
     block += `Elapsed Time     : ${padElapsed(s.Elapsed)}\n`;
-    block += `Repaired         : ${s.ItemIndex} / ${s.TotalItems}\n`;
+    block += `Repaired         : ${fmtNum(s.ItemIndex)} / ${fmtNum(s.TotalItems)}\n`;
     block += `Completion       : ${pct}%\n`;
     block += "----------------------------------------\n";
     block += workerLines;
@@ -580,8 +586,8 @@ function renderStatusBlock(data) {
 		const modeNames = { Full: "Scan & Repair", ScanOnly: "Scan", RepairOnly: "Repair", SmartCompression: "Smart Compression" };
 		block += `Mode       : ${modeNames[s.Mode] || s.Mode}\n`;
 		block += `Elapsed    : ${padElapsed(s.Elapsed)}\n`;
-		block += `Scanned    : ${s.Scanned}/${s.Total}\n`;
-		block += `Completion : ${Math.round((s.Scanned / s.Total) * 100)}%\n`;
+		block += `Scanned    : ${fmtNum(s.Scanned)}/${fmtNum(s.Total)}\n`;
+		block += `Completion : ${s.Total > 0 ? Math.floor((s.Scanned / s.Total) * 100) : 0}%\n`;
 		block += "----------------------------------------\n";
 		block += workerLines;
 		consoleEl.textContent = block;
@@ -1011,7 +1017,7 @@ document.getElementById("logFilterInput").addEventListener("input", () => {
             logSpacer.style.height = "0px";
             logContent.style.top   = "0px";
             renderLogFile(currentEntries);
-            countEl.textContent = `${currentEntries.length} of ${fullLogLength}`;
+            countEl.textContent = `${fmtNum(data.matched)} matches`;
         } else {
             countEl.textContent = "";
             logAutoScroll = true;
@@ -1934,7 +1940,7 @@ async function syncLiveLogFromTotal(newTotal) {
         logSpacer.style.height = "0px";
         logContent.style.top   = "0px";
         renderLogFile(currentEntries);
-        document.getElementById("logFilterCount").textContent = `${currentEntries.length} of ${fullLogLength}`;
+        document.getElementById("logFilterCount").textContent = `${fmtNum(data.matched)} matches`;
         return true;
     }
 

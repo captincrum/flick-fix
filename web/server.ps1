@@ -1,10 +1,7 @@
 # -------------------------[ Server Initialization ]------------------------- #
 
-#Add-Type -Name Win32 -Namespace Console -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);' ; [Console.Win32]::ShowWindow((Get-Process -Id $PID).MainWindowHandle, 0)
-
 if ($MyInvocation.InvocationName -ne '.') {
-
-    Start-Sleep -Milliseconds 250 												# Give the server a moment to start
+    Start-Sleep -Milliseconds 250   # give the server a moment to start
 
     $edgeRunning = Get-Process msedge -ErrorAction SilentlyContinue | Where-Object {
         $_.MainWindowTitle -eq "FlickFix"
@@ -15,24 +12,24 @@ if ($MyInvocation.InvocationName -ne '.') {
     }
 }
 
-# -------------------------[ Path + Module Setup ]-------------------------- #
+# -------------------------[ Path + Module Setup ]--------------------------- #
 
-$port         = 17863
-$root         = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot  = Split-Path $root -Parent
-$modulesPath  = Join-Path $projectRoot "Modules"
+$port        = 17863
+$root        = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path $root -Parent
+$modulesPath = Join-Path $projectRoot "Modules"
 
-. (Join-Path $projectRoot "GUI-Core.ps1") $projectRoot							# Load core orchestration (defines Start-UMPipeline-Core and $Global:UM_CurrentJob)
+. (Join-Path $projectRoot "GUI-Core.ps1") $projectRoot   # defines Start-UMPipeline-Core + $Global:UM_CurrentJob
 . (Join-Path $modulesPath "UM-Errors.ps1")
 
-# -------------------------[ HTTP Listener Setup ]-------------------------- #
+# -------------------------[ HTTP Listener Setup ]--------------------------- #
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
 $listener.Start()
 $gpuDetectCache = $null
 
-# -------------------------[ Response Helpers ]----------------------------- #
+# -------------------------[ Response Helpers ]------------------------------ #
 
 function Send-Json {
     param($response, $obj)
@@ -68,11 +65,10 @@ function Send-File {
     $response.OutputStream.Write($bytes, 0, $bytes.Length)
 }
 
-# -------------------------[ Log Cache ]----------------------------------- #
+# -------------------------[ Log Cache ]------------------------------------- #
 
 function Update-LogCache {
-    # Debounce: never re-read the file more than once per second, regardless
-    # of how many requests arrive in between.
+    # debounce: re-read the file at most once per second
     $now = [datetime]::UtcNow
     if (($now - $Global:UM_LogCacheLastRead).TotalMilliseconds -lt 1000) {
         return
@@ -126,20 +122,20 @@ function Update-LogCache {
     $Global:UM_LogCacheSize = $fileSize
 }
 
-# -------------------------[ Global State ]--------------------------------- #
+# -------------------------[ Global State ]---------------------------------- #
 
-$Global:UM_Status             = "idle"
-$Global:UM_LatestStatus       = $null
-$Global:UM_Job                = $null
+$Global:UM_Status       = "idle"
+$Global:UM_LatestStatus = $null
+$Global:UM_Job          = $null
 
-# Log cache — avoids re-reading the entire file on every request
-$Global:UM_LogCache           = [System.Collections.Generic.List[string]]::new()
-$Global:UM_LogCacheSize       = 0
-$Global:UM_LogCacheLastRead   = [datetime]::MinValue
+# log cache — avoids re-reading the entire file on every request
+$Global:UM_LogCache         = [System.Collections.Generic.List[string]]::new()
+$Global:UM_LogCacheSize     = 0
+$Global:UM_LogCacheLastRead = [datetime]::MinValue
 
-# Universal validation messages — defined once, reused at every call site.
+# validation messages — defined once, reused at every call site
 $Global:UM_MsgPathNotFound = "Directory not found. Check the path and try again.`nInvalid directory path: "
-$Global:UM_MsgNoSpace       = "Not enough available space at the given location."
+$Global:UM_MsgNoSpace      = "Not enough available space at the given location."
 
 function Format-MB {
     param([double]$mb)
@@ -149,7 +145,7 @@ function Format-MB {
     return ("{0:0.0} MB" -f $mb)
 }
 
-# -------------------------[ Start Pipeline ]------------------------------- #
+# -------------------------[ Start Pipeline ]-------------------------------- #
 
 function Start-Pipeline {
     param($settings)
@@ -177,10 +173,9 @@ function Start-Pipeline {
     }
 }
 
-# -------------------------[ Stop Pipeline ]-------------------------------- #
+# -------------------------[ Stop Pipeline ]--------------------------------- #
 
 function Stop-Pipeline {
-
     Get-Process -Name "ffmpeg" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
     if ($Global:UM_Job) {
@@ -209,12 +204,10 @@ function Stop-Pipeline {
     $Global:UM_LatestStatus = $null
 }
 
-# -------------------------[ Main Loop ]------------------------------------ #
+# -------------------------[ Main Loop ]------------------------------------- #
 
 while ($true) {
-
     if ($Global:UM_Job) {
-
         $output = $null
         try {
             $output = Receive-Job $Global:UM_Job -ErrorAction SilentlyContinue
@@ -222,17 +215,15 @@ while ($true) {
 
         if ($output) {
             foreach ($o in $output) {
-
                 if ($o -is [pscustomobject]) {
-
                     if ($o.SessionStart) { $Global:UM_RepairSessionStart = $o.SessionStart }
                     if ($o.FileStart)    { $Global:UM_RepairFileStart    = $o.FileStart }
                     if ($o.AttemptStart) { $Global:UM_RepairAttemptStart = $o.AttemptStart }
 
-					if ($o.Type -eq "CompressProgress") { $Global:UM_HeartbeatPhase = "Phase3" }
+                    if ($o.Type -eq "CompressProgress") { $Global:UM_HeartbeatPhase = "Phase3" }
                     $Global:UM_LatestStatus = $o
-					
-					if ($o.Type -eq "CompressProgress") { 
+
+                    if ($o.Type -eq "CompressProgress") {
                         $Global:UM_HeartbeatPhase = "Phase3"
                     }
                     $Global:UM_LatestStatus = $o
@@ -252,7 +243,7 @@ while ($true) {
         UM-RenderHeartbeat
     }
 
-    # -------------------------[ HTTP Request Handling ]-------------------- #
+    # -------------------------[ HTTP Request Handling ]--------------------- #
 
     $context  = $listener.GetContext()
     $request  = $context.Request
@@ -260,81 +251,82 @@ while ($true) {
     $path     = $request.Url.AbsolutePath.ToLower()
 
     switch ($path) {
+        "/"            { Send-File $response "$root\index.html" "text/html" }
+        "/index.html"  { Send-File $response "$root\index.html" "text/html" }
+        "/style.css"   { Send-File $response "$root\style.css" "text/css" }
+        "/app.js"      { Send-File $response "$root\app.js" "application/javascript" }
+        "/favicon.ico" { Send-File $response "$root\favicon.ico" "image/x-icon" }
 
-        "/"           { Send-File $response "$root\index.html" "text/html" }
-        "/index.html" { Send-File $response "$root\index.html" "text/html" }
-        "/style.css"  { Send-File $response "$root\style.css" "text/css" }
-        "/app.js"     { Send-File $response "$root\app.js" "application/javascript" }
-		"/favicon.ico"{ Send-File $response "$root\favicon.ico" "image/x-icon" }
+        # -------------------------[ API: Buttons ]---------------------------------- #
 
-        # ------------------------[ API: Buttons ]--------------------------- #
+        "/start" {
+            $settings = @{
+                RootPath        = $request.QueryString["root"]
+                RepairedPath    = $request.QueryString["repaired"]
+                Mode            = $request.QueryString["mode"]
+                ScanAllEpisodes = ($request.QueryString["scanAll"] -eq "true")
+                Workers         = if ($request.QueryString["workers"]) { [int]$request.QueryString["workers"] } else { $config.Workers }
+                UseGPU          = ($request.QueryString["useGPU"] -eq "true")
+            }
 
-		"/start" {
-			$settings = @{
-				RootPath        = $request.QueryString["root"]
-				RepairedPath    = $request.QueryString["repaired"]
-				Mode            = $request.QueryString["mode"]
-				ScanAllEpisodes = ($request.QueryString["scanAll"] -eq "true")
-				Workers         = if ($request.QueryString["workers"]) { [int]$request.QueryString["workers"] } else { $config.Workers }
-				UseGPU          = ($request.QueryString["useGPU"] -eq "true")
-			}
+            # -------------------------[ VALIDATION: Library Root ]---------------------- #
 
-			# ------------------[ VALIDATION: Library Root ]------------------ #
-			if (-not $settings.RootPath -or -not (Test-Path $settings.RootPath)) {
-				Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($settings.RootPath)" }
-				continue
-			}
+            if (-not $settings.RootPath -or -not (Test-Path $settings.RootPath)) {
+                Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($settings.RootPath)" }
+                continue
+            }
 
-			# ------------------[ VALIDATION: Repaired Output ]------------------ #
-			$skipRepairedCheck = $settings.Mode -in @("ScanOnly", "SmartCompression")
-			if (-not $skipRepairedCheck -and -not (Test-Path $settings.RepairedPath)) {
-				Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($settings.RepairedPath)" }
-				continue
-			}
+            # -------------------------[ VALIDATION: Repaired Output ]------------------- #
 
-			# ------------------[ VALIDATION: Repaired Output space ]------------------ #
-			# Worst case: no kept repaired file exceeds UM-MaxSizeRatio x its source
-			# (Repair.psm1), so 1.5 x total source media size is a safe upper bound.
-			if (-not $skipRepairedCheck) {
-				try {
-					$sourceBytes = (Get-ChildItem -Path $settings.RootPath -Recurse -File -Include (UM-VideoExtensions) -ErrorAction SilentlyContinue |
-									Measure-Object -Property Length -Sum).Sum
-					if (-not $sourceBytes) { $sourceBytes = 0 }
-					$neededMB = [math]::Round(($sourceBytes * (UM-MaxSizeRatio)) / 1MB, 2)
+            $skipRepairedCheck = $settings.Mode -in @("ScanOnly", "SmartCompression")
+            if (-not $skipRepairedCheck -and -not (Test-Path $settings.RepairedPath)) {
+                Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($settings.RepairedPath)" }
+                continue
+            }
 
-					$drive  = Split-Path -Qualifier $settings.RepairedPath
-					$disk   = Get-PSDrive -Name $drive.TrimEnd(':') -ErrorAction Stop
-					$freeMB = [math]::Round($disk.Free / 1MB, 2)
+            # -------------------------[ VALIDATION: Repaired Output Space ]------------- #
 
-					if ($freeMB -lt $neededMB) {
-						$addMB = [math]::Round($neededMB - $freeMB, 2)
-						$msg   = "$Global:UM_MsgNoSpace`nNeeded: $(Format-MB $neededMB)`nAvailable: $(Format-MB $freeMB)`nAdditional: $(Format-MB $addMB)"
-						Send-Json $response @{ ok = $false; error = $msg }
-						continue
-					}
-				}
-				catch {
-					# Free space couldn't be determined (e.g. a UNC path) — fail open,
-					# don't block the run on a check we can't perform.
-				}
-			}
+            # worst case: a kept repaired file is MaxSizeRatio x its source, so 1.5x total source media is a safe upper bound
+            if (-not $skipRepairedCheck) {
+                try {
+                    $sourceBytes = (Get-ChildItem -Path $settings.RootPath -Recurse -File -Include (UM-VideoExtensions) -ErrorAction SilentlyContinue |
+                                    Measure-Object -Property Length -Sum).Sum
+                    if (-not $sourceBytes) { $sourceBytes = 0 }
+                    $neededMB = [math]::Round(($sourceBytes * (UM-MaxSizeRatio)) / 1MB, 2)
 
-			# ------------------[ START PIPELINE ]------------------ #
-			Start-Pipeline $settings
+                    $drive  = Split-Path -Qualifier $settings.RepairedPath
+                    $disk   = Get-PSDrive -Name $drive.TrimEnd(':') -ErrorAction Stop
+                    $freeMB = [math]::Round($disk.Free / 1MB, 2)
+
+                    if ($freeMB -lt $neededMB) {
+                        $addMB = [math]::Round($neededMB - $freeMB, 2)
+                        $msg   = "$Global:UM_MsgNoSpace`nNeeded: $(Format-MB $neededMB)`nAvailable: $(Format-MB $freeMB)`nAdditional: $(Format-MB $addMB)"
+                        Send-Json $response @{ ok = $false; error = $msg }
+                        continue
+                    }
+                }
+                catch {
+                    # couldn't determine free space (e.g. a UNC path) — fail open rather than block the run
+                }
+            }
+
+            # -------------------------[ START PIPELINE ]-------------------------------- #
+
+            Start-Pipeline $settings
             $Global:UM_Job = $Global:UM_CurrentJob
             Send-Json $response @{ ok = $true }
-		}
-        
-		"/cancel" {
+        }
+
+        "/cancel" {
             Stop-Pipeline
             Send-Json $response @{ ok = $true }
         }
-        
-		"/status" {
+
+        "/status" {
             Send-Json $response @{ status = $Global:UM_Status }
         }
-        
-		"/status-console" {
+
+        "/status-console" {
             $payload = $Global:UM_LatestStatus
 
             if ($payload) {
@@ -343,22 +335,21 @@ while ($true) {
 
             Send-Json $response @{ status = $payload }
         }
-        
-		"/status-all" {
-			Update-LogCache
-			$payload = $Global:UM_LatestStatus
-			if ($payload) {
-				$payload | Add-Member -NotePropertyName Mode -NotePropertyValue (UM-PrettyMode $Global:UM_Mode) -Force
-			}
-			Send-Json $response @{
-				status   = $payload
-				runState = $Global:UM_Status
-				logTotal = $Global:UM_LogCache.Count
-			}
-		}
-		
-		"/browse-folder" {
 
+        "/status-all" {
+            Update-LogCache
+            $payload = $Global:UM_LatestStatus
+            if ($payload) {
+                $payload | Add-Member -NotePropertyName Mode -NotePropertyValue (UM-PrettyMode $Global:UM_Mode) -Force
+            }
+            Send-Json $response @{
+                status   = $payload
+                runState = $Global:UM_Status
+                logTotal = $Global:UM_LogCache.Count
+            }
+        }
+
+        "/browse-folder" {
             Add-Type -AssemblyName System.Windows.Forms
 
             $owner = New-Object System.Windows.Forms.Form
@@ -371,7 +362,7 @@ while ($true) {
             $owner.Show()
 
             $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-            $dialog.Description        = "Select a folder"
+            $dialog.Description         = "Select a folder"
             $dialog.ShowNewFolderButton = $true
 
             $result = $dialog.ShowDialog($owner)
@@ -385,18 +376,8 @@ while ($true) {
 
             $owner.Dispose()
         }
-        
-		"/logs/human" {
-            try {
-                $entries = UM-ReadUnifiedLog
-                Send-Json $response @{ ok = $true; entries = $entries }
-            }
-            catch {
-                Send-Json $response @{ ok = $false; error = $_.Exception.Message }
-            }
-        }
-        
-		"/logs/machine" {
+
+        "/logs/human" {
             try {
                 $entries = UM-ReadUnifiedLog
                 Send-Json $response @{ ok = $true; entries = $entries }
@@ -406,80 +387,90 @@ while ($true) {
             }
         }
 
-		"/logs/total" {
-			try {
-				Update-LogCache
-				Send-Json $response @{ ok = $true; total = $Global:UM_LogCache.Count }
-			}
-			catch {
-				Send-Json $response @{ ok = $false; total = 0 }
-			}
-		}
+        "/logs/machine" {
+            try {
+                $entries = UM-ReadUnifiedLog
+                Send-Json $response @{ ok = $true; entries = $entries }
+            }
+            catch {
+                Send-Json $response @{ ok = $false; error = $_.Exception.Message }
+            }
+        }
 
-		"/logs/slice" {
-			try {
-				$start = [int]$request.QueryString["start"]
-				$end   = [int]$request.QueryString["end"]
+        "/logs/total" {
+            try {
+                Update-LogCache
+                Send-Json $response @{ ok = $true; total = $Global:UM_LogCache.Count }
+            }
+            catch {
+                Send-Json $response @{ ok = $false; total = 0 }
+            }
+        }
 
-				Update-LogCache
-				$total = $Global:UM_LogCache.Count
+        "/logs/slice" {
+            try {
+                $start = [int]$request.QueryString["start"]
+                $end   = [int]$request.QueryString["end"]
 
-				if ($total -eq 0) {
-					Send-RawJson $response '{"ok":true,"entries":[],"total":0}'
-					continue
-				}
+                Update-LogCache
+                $total = $Global:UM_LogCache.Count
 
-				if ($start -lt 0) { $start = 0 }
-				if ($start -ge $total) { $start = [Math]::Max(0, $total - 1) }
-				$end = [Math]::Min($end, $total)
-				$count = $end - $start
-				if ($count -lt 0) { $count = 0 }
+                if ($total -eq 0) {
+                    Send-RawJson $response '{"ok":true,"entries":[],"total":0}'
+                    continue
+                }
 
-				# Cache lines are already valid single-line JSON. Stitch them into a
-				# JSON array and send as-is — no ConvertFrom-Json / ConvertTo-Json.
-				$rawLines = $Global:UM_LogCache.GetRange($start, $count)
-				$entriesJson = "[" + ($rawLines -join ",") + "]"
+                if ($start -lt 0) { $start = 0 }
+                if ($start -ge $total) { $start = [Math]::Max(0, $total - 1) }
+                $end = [Math]::Min($end, $total)
+                $count = $end - $start
+                if ($count -lt 0) { $count = 0 }
 
-				Send-RawJson $response ('{"ok":true,"entries":' + $entriesJson + ',"total":' + $total + '}')
-			}
-			catch {
-				Send-Json $response @{ ok = $false; error = $_.Exception.Message }
-			}
-		}
-		
-		"/logs/search" {
-			try {
-				$query = $request.QueryString["q"]
-				$max   = if ($request.QueryString["max"]) { [int]$request.QueryString["max"] } else { 500 }
+                # cache lines are already valid single-line JSON — just join them into an array
+                $rawLines = $Global:UM_LogCache.GetRange($start, $count)
+                $entriesJson = "[" + ($rawLines -join ",") + "]"
 
-				if (-not $query) {
-					Send-RawJson $response '{"ok":true,"entries":[],"total":0}'
-					continue
-				}
+                Send-RawJson $response ('{"ok":true,"entries":' + $entriesJson + ',"total":' + $total + '}')
+            }
+            catch {
+                Send-Json $response @{ ok = $false; error = $_.Exception.Message }
+            }
+        }
 
-				Update-LogCache
-				$total = $Global:UM_LogCache.Count
-				$lowerQuery = $query.ToLower()
+        "/logs/search" {
+            try {
+                $query = $request.QueryString["q"]
+                $max   = if ($request.QueryString["max"]) { [int]$request.QueryString["max"] } else { 500 }
 
-				$matched = [System.Collections.Generic.List[string]]::new()
-				foreach ($line in $Global:UM_LogCache) {
-					if ($matched.Count -ge $max) { break }
-					$lower = $line.ToLower().Replace("\\", "\")
-					if ($lower.Contains($lowerQuery) -or $line.ToLower().Contains($lowerQuery)) {
-						$matched.Add($line)
-					}
-				}
+                if (-not $query) {
+                    Send-RawJson $response '{"ok":true,"entries":[],"total":0,"matched":0}'
+                    continue
+                }
 
-				# Matched lines are already JSON — emit them directly.
-				$entriesJson = "[" + ($matched -join ",") + "]"
-				Send-RawJson $response ('{"ok":true,"entries":' + $entriesJson + ',"total":' + $total + '}')
-			}
-			catch {
-				Send-Json $response @{ ok = $false; error = $_.Exception.Message }
-			}
-		}
-		
-		"/logs/clear" {
+                Update-LogCache
+                $total = $Global:UM_LogCache.Count
+                $lowerQuery = $query.ToLower()
+
+                $matchCount = 0
+                $matched = [System.Collections.Generic.List[string]]::new()
+                foreach ($line in $Global:UM_LogCache) {
+                    $lower = $line.ToLower().Replace("\\", "\")
+                    if ($lower.Contains($lowerQuery) -or $line.ToLower().Contains($lowerQuery)) {
+                        $matchCount++
+                        if ($matched.Count -lt $max) { $matched.Add($line) }
+                    }
+                }
+
+                # $matched holds at most $max rows for rendering; $matchCount is the true total.
+                $entriesJson = "[" + ($matched -join ",") + "]"
+                Send-RawJson $response ('{"ok":true,"entries":' + $entriesJson + ',"total":' + $total + ',"matched":' + $matchCount + '}')
+            }
+            catch {
+                Send-Json $response @{ ok = $false; error = $_.Exception.Message }
+            }
+        }
+
+        "/logs/clear" {
             try {
                 if (Test-Path $Global:UnifiedMachineLogPath) {
                     "" | Set-Content -Path $Global:UnifiedMachineLogPath -Encoding UTF8
@@ -496,9 +487,9 @@ while ($true) {
                 Send-Json $response @{ ok = $false; error = $_.Exception.Message }
             }
         }
-		
-		"/config" {
-			Send-Json $response @{
+
+        "/config" {
+            Send-Json $response @{
                 ok = $true
                 config = @{
                     RootPath              = $config.RootPath
@@ -508,13 +499,13 @@ while ($true) {
                     AccurateMode          = $config.AccurateMode
                     CompressionOutputPath = $config.CompressionOutputPath
                     CrfValue              = if ($config.CrfValue) { $config.CrfValue } else { 22 }
-					Workers               = if ($config.Workers -gt 0) { $config.Workers } else { 4 }
+                    Workers               = if ($config.Workers -gt 0) { $config.Workers } else { 4 }
                     UseGPU                = if ($null -ne $config.UseGPU) { [bool]$config.UseGPU } else { $false }
                 }
             }
         }
 
-		"/config/save" {
+        "/config/save" {
             $config.RootPath        = $request.QueryString["root"]
             $config.RepairedPath    = $request.QueryString["repaired"]
             $config.Mode            = $request.QueryString["mode"]
@@ -527,31 +518,31 @@ while ($true) {
             Send-Json $response @{ ok = $true }
         }
 
-		"/gpu-detect" {
-			if ($null -eq $gpuDetectCache) {
-				try {
-					$encodersRaw = & ffmpeg -hide_banner -encoders 2>&1 | Out-String
-					if ($encodersRaw -match "hevc_nvenc") {
-						$gpuDetectCache = @{ ok = $true; available = $true; encoder = "nvenc"; name = "NVIDIA NVENC" }
-					}
-					elseif ($encodersRaw -match "hevc_amf") {
-						$gpuDetectCache = @{ ok = $true; available = $true; encoder = "amf"; name = "AMD AMF" }
-					}
-					elseif ($encodersRaw -match "hevc_qsv") {
-						$gpuDetectCache = @{ ok = $true; available = $true; encoder = "qsv"; name = "Intel QSV" }
-					}
-					else {
-						$gpuDetectCache = @{ ok = $true; available = $false; encoder = ""; name = "None" }
-					}
-				}
-				catch {
-					$gpuDetectCache = @{ ok = $true; available = $false; encoder = ""; name = "None" }
-				}
-			}
-			Send-Json $response $gpuDetectCache
-		}
-		
-		"/disk-space" {
+        "/gpu-detect" {
+            if ($null -eq $gpuDetectCache) {
+                try {
+                    $encodersRaw = & ffmpeg -hide_banner -encoders 2>&1 | Out-String
+                    if ($encodersRaw -match "hevc_nvenc") {
+                        $gpuDetectCache = @{ ok = $true; available = $true; encoder = "nvenc"; name = "NVIDIA NVENC" }
+                    }
+                    elseif ($encodersRaw -match "hevc_amf") {
+                        $gpuDetectCache = @{ ok = $true; available = $true; encoder = "amf"; name = "AMD AMF" }
+                    }
+                    elseif ($encodersRaw -match "hevc_qsv") {
+                        $gpuDetectCache = @{ ok = $true; available = $true; encoder = "qsv"; name = "Intel QSV" }
+                    }
+                    else {
+                        $gpuDetectCache = @{ ok = $true; available = $false; encoder = ""; name = "None" }
+                    }
+                }
+                catch {
+                    $gpuDetectCache = @{ ok = $true; available = $false; encoder = ""; name = "None" }
+                }
+            }
+            Send-Json $response $gpuDetectCache
+        }
+
+        "/disk-space" {
             try {
                 $drivePath = $request.QueryString["path"]
                 $drive = Split-Path -Qualifier $drivePath
@@ -563,10 +554,10 @@ while ($true) {
             }
         }
 
-		"/compress/start" {
+        "/compress/start" {
             try {
-                $body    = New-Object System.IO.StreamReader($request.InputStream)
-                $json    = $body.ReadToEnd()
+                $body = New-Object System.IO.StreamReader($request.InputStream)
+                $json = $body.ReadToEnd()
 
                 if (-not $json -or $json.Trim() -eq "") {
                     Send-Json $response @{ ok = $false; error = "Empty request body" }
@@ -579,8 +570,8 @@ while ($true) {
                     Send-Json $response @{ ok = $false; error = "No paths in payload" }
                     continue
                 }
-				
-				if (-not (Test-Path $payload.outputPath)) {
+
+                if (-not (Test-Path $payload.outputPath)) {
                     Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($payload.outputPath)" }
                     continue
                 }
@@ -591,7 +582,7 @@ while ($true) {
                 $queuePath = Join-Path $logsRoot "CompressionQueue.json"
                 $json | Set-Content -Path $queuePath -Encoding UTF8
 
-			$config.CompressionOutputPath = $payload.outputPath
+                $config.CompressionOutputPath = $payload.outputPath
                 $config.CrfValue              = if ($payload.crf) { [int]$payload.crf } else { 22 }
                 Save-Config $config
 
@@ -613,9 +604,9 @@ while ($true) {
             } catch {
                 Send-Json $response @{ ok = $false; error = $_.Exception.Message }
             }
-        }		
+        }
 
-		"/compression/selections" {
+        "/compression/selections" {
             try {
                 $path = Join-Path $logsRoot "CompressionSelections.json"
                 if (Test-Path $path) {
@@ -633,17 +624,17 @@ while ($true) {
 
         "/compression/selections/save" {
             try {
-                $body    = New-Object System.IO.StreamReader($request.InputStream)
-                $json    = $body.ReadToEnd()
-                $path    = Join-Path $logsRoot "CompressionSelections.json"
+                $body = New-Object System.IO.StreamReader($request.InputStream)
+                $json = $body.ReadToEnd()
+                $path = Join-Path $logsRoot "CompressionSelections.json"
                 $json | Set-Content -Path $path -Encoding UTF8
                 Send-Json $response @{ ok = $true }
             } catch {
                 Send-Json $response @{ ok = $false; error = $_.Exception.Message }
             }
         }
-		
-		default {
+
+        default {
             $response.StatusCode = 404
             $response.OutputStream.Write(
                 [System.Text.Encoding]::UTF8.GetBytes("404 Not Found"), 0, 13

@@ -1,12 +1,12 @@
 ﻿{
     "RootPath":  "D:\\Shows",
     "RepairedPath":  "",
-    "Mode":  "RepairOnly",
-    "ScanAllEpisodes":  false,
-    "AccurateMode":  false,
+    "Mode":  "SmartCompression",
+    "ScanAllEpisodes":  true,
+    "AccurateMode":  true,
     "CompressionOutputPath":  "F:\\",
     "CrfValue":  22,
-    "Workers":  8,
-    "UseGPU":  false,
-    "RunMode":  "ScanOnly"
+    "Workers":  4,
+    "UseGPU":  true,
+    "RunMode":  "SmartCompression"
 }

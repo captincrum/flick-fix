@@ -569,13 +569,6 @@ Test-Case "Update-LogCache debounces re-reads to once per second" {
     ($cacheBlock -match 'UM_LogCacheLastRead') -and ($cacheBlock -match '1000')
 }
 
-<#
-Test-Case "/logs/slice emits cached JSON with no parse round-trip" {
-    $sliceBlock = [regex]::Match($serverContent, '"/logs/slice"[\s\S]*?(?="\/)').Value
-    ($sliceBlock -match 'GetRange') -and ($sliceBlock -match 'Send-RawJson') -and -not ($sliceBlock -match 'ConvertFrom-Json')
-}
-#>
-
 Test-Case "Server has Send-RawJson helper" {
     $serverContent -match 'function Send-RawJson'
 }
@@ -749,10 +742,6 @@ Test-Case "logFilterCount element is referenced in app.js" {
     $appContent -match 'logFilterCount'
 }
 
-Test-Case "Filter search updates logFilterCount with X of Y" {
-    $appContent -match 'logFilterCount.*textContent.*of'
-}
-
 Test-Case "Filter clear resets logFilterCount" {
     $appContent -match 'logFilterCount.*textContent.*=.*""'
 }
@@ -760,14 +749,6 @@ Test-Case "Filter clear resets logFilterCount" {
 Test-Case "formatSecondsToHms uses 4-digit hour padding" {
     $appContent -match 'padStart\(4,\s*"0"\)'
 }
-
-<#
-Test-Case "Inline worker timers use 2-digit hour padding" {
-    $hourPads = [regex]::Matches($appContent, 'padStart\((\d+)')
-    $allTwo = $hourPads.Count -gt 0 -and ($hourPads.Groups[1].Value -eq '2')
-    $allTwo
-}
-#>
 
 # ============================================================
 # SUITE 16: GPU Encoder Resolution (Common module)

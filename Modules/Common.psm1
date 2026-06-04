@@ -70,6 +70,13 @@ function UM-VideoExtensions {
     )
 }
 
+function UM-MaxSizeRatio {
+    # Quality gate: a repaired/re-encoded file is rejected if it exceeds this
+    # multiple of its original size (see Repair.psm1). Also bounds the worst-case
+    # space estimate for the Repaired Root. Single source of truth for this ratio.
+    return 1.5
+}
+
 function UM-LibraryType {
     param(
         [Parameter(Mandatory=$true)]
@@ -541,6 +548,7 @@ Export-ModuleMember -Function `
     UM-GetRepairedOutputPath, `
     UM-PrettyMode, `
     UM-VideoExtensions, `
+    UM-MaxSizeRatio, `
     UM-LibraryType, `
     UM-ResolveEncoder, `
     UM-ResolveEncoderArgs, `

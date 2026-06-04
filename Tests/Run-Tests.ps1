@@ -615,6 +615,46 @@ Test-Case "/logs/clear resets the log cache" {
     $clearBlock -match 'UM_LogCache\.Clear' -and $clearBlock -match 'UM_LogCacheSize.*=.*0'
 }
 
+Test-Case "/logs/clear removes CompressionSelections.json" {
+    $clearBlock = [regex]::Match($serverContent, '"/logs/clear"[\s\S]*?(?="\/)').Value
+    $clearBlock -match 'CompressionSelections\.json' -and $clearBlock -match 'Remove-Item'
+}
+
+# Universal validation messages + shared ratio
+$commonContent = Get-Content (Join-Path $repoRoot "Modules\Common.psm1") -Raw
+$repairContent = Get-Content (Join-Path $repoRoot "Modules\Repair.psm1") -Raw
+
+Test-Case "Common defines UM-MaxSizeRatio returning 1.5" {
+    $commonContent -match 'function UM-MaxSizeRatio[\s\S]*?return 1\.5'
+}
+
+Test-Case "Repair.psm1 uses UM-MaxSizeRatio (no bare 1.5 size gate)" {
+    ($repairContent -match 'UM-MaxSizeRatio') -and ($repairContent -notmatch '\* 1\.5\b') -and ($repairContent -notmatch 'SizeRatio -gt 1\.5')
+}
+
+Test-Case "Server defines the universal path-not-found message" {
+    $serverContent -match 'UM_MsgPathNotFound\s*=\s*"Directory not found.'
+}
+
+Test-Case "Server defines the universal no-space message" {
+    $serverContent -match 'UM_MsgNoSpace\s*=\s*"Not enough available space'
+}
+
+Test-Case "/start returns universal not-found error instead of Console status" {
+    $startBlock = [regex]::Match($serverContent, '"/start"[\s\S]*?(?="\/)').Value
+    ($startBlock -match 'UM_MsgPathNotFound') -and ($startBlock -notmatch 'The path for "Library Root" was not found')
+}
+
+Test-Case "/start has a Repaired Root space check using the ratio and media types" {
+    $startBlock = [regex]::Match($serverContent, '"/start"[\s\S]*?(?="\/)').Value
+    ($startBlock -match 'UM-MaxSizeRatio') -and ($startBlock -match 'UM-VideoExtensions') -and ($startBlock -match 'UM_MsgNoSpace')
+}
+
+Test-Case "/compress/start validates the output path exists" {
+    $compBlock = [regex]::Match($serverContent, '"/compress/start"[\s\S]*?(?="\/)').Value
+    ($compBlock -match 'Test-Path \$payload\.outputPath') -and ($compBlock -match 'UM_MsgPathNotFound')
+}
+
 # ============================================================
 # SUITE 15: Client-Side Contracts
 # Verifies app.js has all required functions and patterns
@@ -625,6 +665,15 @@ Write-Host "--------------------------------"
 
 $appPath = Join-Path $repoRoot "web\app.js"
 $appContent = Get-Content $appPath -Raw
+
+Test-Case "app.js Start handler shows an error popup on failure" {
+    $startHandler = [regex]::Match($appContent, "getElementById\(`"startBtn`"\)\.addEventListener[\s\S]*?console\.log\(`"Start:`"").Value
+    $startHandler -match 'showError\(result\.error'
+}
+
+Test-Case "app.js compression space error uses the universal no-space message" {
+    $appContent -match 'Not enough available space at the given location' -and $appContent -match 'Additional:'
+}
 
 Test-Case "app.js has apiLogTotal function" {
     $appContent -match 'async function apiLogTotal'

@@ -321,7 +321,7 @@ test.describe('Mode: Repair Only', () => {
         await page.locator('#repairedPath').fill('');
         await page.locator('#startBtn').click();
         await expect(page.locator('#errorModal')).toBeVisible();
-        await expect(page.locator('#errorMessage')).toContainText('Repaired Output');
+        await expect(page.locator('#errorMessage')).toContainText('Repaired Root');
     });
 
 });
@@ -1177,6 +1177,43 @@ test.describe('GPU Encoding Toggle', () => {
         expect(json.config.UseGPU).toBe(true);
         // restore
         await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false&useGPU=false`);
+    });
+
+});
+
+// ================================================================
+// SUITE 18: Path Not-Found Validation (universal popup)
+// ================================================================
+test.describe('Path Not-Found Validation', () => {
+
+    test.beforeEach(async ({ page }) => { await resetConfig(page); });
+
+    test('Nonexistent Library Root shows the path-not-found popup', async ({ page }) => {
+        await page.locator('#rootPath').fill('Z:\\nope_askjdhfs');
+        await page.locator('#repairedPath').fill('Z:\\nope_repaired');
+        await page.locator('#startBtn').click();
+        await expect(page.locator('#errorModal')).toBeVisible();
+        await expect(page.locator('#errorMessage')).toContainText('Directory not found.');
+        await expect(page.locator('#errorMessage')).toContainText('Z:\\nope_askjdhfs');
+    });
+
+    test('Nonexistent Repaired Root shows the path-not-found popup', async ({ page }) => {
+        await page.locator('#rootPath').fill('C:\\Windows');       // a path that exists, so root passes
+        await page.locator('#repairedPath').fill('Z:\\nope_repaired');
+        await page.locator('#startBtn').click();
+        await expect(page.locator('#errorModal')).toBeVisible();
+        await expect(page.locator('#errorMessage')).toContainText('Directory not found.');
+        await expect(page.locator('#errorMessage')).toContainText('Z:\\nope_repaired');
+    });
+
+    test('Nonexistent Compressed Root is rejected by /compress/start', async ({ page }) => {
+        const res = await page.request.post(`${BASE_URL}/compress/start`, {
+            data: { outputPath: 'Z:\\nope_compressed', paths: ['Z:\\nope\\file.mkv'], crf: 22 }
+        });
+        const body = await res.json();
+        expect(body.ok).toBe(false);
+        expect(body.error).toContain('Directory not found.');
+        expect(body.error).toContain('Z:\\nope_compressed');
     });
 
 });

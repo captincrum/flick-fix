@@ -1161,7 +1161,7 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     }
 
     if (mode !== "ScanOnly" && mode !== "SmartCompression" && !repaired) {
-        showError("Please select a Repaired Output folder before starting.");
+        showError("Please select a Repaired Root folder before starting.");
         return;
     }
 
@@ -1169,6 +1169,11 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     const workers = parseInt(document.getElementById("workerCount").value) || 4;
     const useGPU  = document.getElementById("useGPU").checked;
     const result = await apiStart(root, repaired, mode, scanAll, workers, useGPU);
+    if (!result.ok) {
+        startBtn.classList.remove("running");
+        showError(result.error || "Could not start. Check your settings and try again.");
+        return;
+    }
     console.log("Start:", result);
 });
 
@@ -1844,7 +1849,7 @@ document.getElementById("compressionBrowse").addEventListener("click", async () 
 document.getElementById("compressionStart").addEventListener("click", async () => {
     const outputPath = document.getElementById("compressionOutputPath").value.trim();
 	if (!outputPath) {
-        showError("Please select an Output Location before compressing.");
+        showError("Please select a Compression Root before compressing.");
         return;
     }
 
@@ -1873,11 +1878,12 @@ document.getElementById("compressionStart").addEventListener("click", async () =
         if (t.includes("GB")) return n * 1024;
         return n;
     };
-    const neededMB = parseSize(estMBText);
+    const neededMB = parseSize(estMBText);   // probe-calculated estimated output size
     const spaceRes = await fetch(`/disk-space?path=${encodeURIComponent(outputPath)}`);
     const spaceData = await spaceRes.json();
     if (spaceData.ok && spaceData.freeMB < neededMB) {
-        showError(`Not enough disk space.\nNeeded: ${formatMB(neededMB)}\nAvailable: ${formatMB(spaceData.freeMB)}`);
+        const additionalMB = neededMB - spaceData.freeMB;
+        showError(`Not enough available space at the given location.\nNeeded: ${formatMB(neededMB)}\nAvailable: ${formatMB(spaceData.freeMB)}\nAdditional: ${formatMB(additionalMB)}`);
         return;
     }
 
@@ -1896,7 +1902,7 @@ document.getElementById("compressionStart").addEventListener("click", async () =
     });
     const result = await res.json();
     if (!result.ok) {
-        showError("Failed to start compression: " + (result.error || "Unknown error"));
+        showError(result.error || "Could not start compression. Check your settings and try again.");
         return;
     }
 

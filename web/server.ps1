@@ -137,6 +137,18 @@ $Global:UM_LogCache           = [System.Collections.Generic.List[string]]::new()
 $Global:UM_LogCacheSize       = 0
 $Global:UM_LogCacheLastRead   = [datetime]::MinValue
 
+# Universal validation messages — defined once, reused at every call site.
+$Global:UM_MsgPathNotFound = "Directory not found. Check the path and try again.`nInvalid directory path: "
+$Global:UM_MsgNoSpace       = "Not enough available space at the given location."
+
+function Format-MB {
+    param([double]$mb)
+    if (-not $mb)        { return "0 MB" }
+    if ($mb -ge 1048576) { return ("{0:0.00} TB" -f ($mb / 1048576)) }
+    if ($mb -ge 1024)    { return ("{0:0.00} GB" -f ($mb / 1024)) }
+    return ("{0:0.0} MB" -f $mb)
+}
+
 # -------------------------[ Start Pipeline ]------------------------------- #
 
 function Start-Pipeline {
@@ -269,27 +281,42 @@ while ($true) {
 
 			# ------------------[ VALIDATION: Library Root ]------------------ #
 			if (-not $settings.RootPath -or -not (Test-Path $settings.RootPath)) {
-				$Global:UM_Status       = "error"
-				$Global:UM_LatestStatus = [pscustomobject]@{
-					Type    = "Console"
-					Message = 'ERROR: The path for "Library Root" was not found.'
-				}
-
-				Send-Json $response @{ ok = $false }
+				Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($settings.RootPath)" }
 				continue
 			}
 
 			# ------------------[ VALIDATION: Repaired Output ]------------------ #
 			$skipRepairedCheck = $settings.Mode -in @("ScanOnly", "SmartCompression")
 			if (-not $skipRepairedCheck -and -not (Test-Path $settings.RepairedPath)) {
-				$Global:UM_Status       = "error"
-				$Global:UM_LatestStatus = [pscustomobject]@{
-					Type    = "Console"
-					Message = 'ERROR: The path for "Repaired Output" was not found.'
-				}
-
-				Send-Json $response @{ ok = $false }
+				Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($settings.RepairedPath)" }
 				continue
+			}
+
+			# ------------------[ VALIDATION: Repaired Output space ]------------------ #
+			# Worst case: no kept repaired file exceeds UM-MaxSizeRatio x its source
+			# (Repair.psm1), so 1.5 x total source media size is a safe upper bound.
+			if (-not $skipRepairedCheck) {
+				try {
+					$sourceBytes = (Get-ChildItem -Path $settings.RootPath -Recurse -File -Include (UM-VideoExtensions) -ErrorAction SilentlyContinue |
+									Measure-Object -Property Length -Sum).Sum
+					if (-not $sourceBytes) { $sourceBytes = 0 }
+					$neededMB = [math]::Round(($sourceBytes * (UM-MaxSizeRatio)) / 1MB, 2)
+
+					$drive  = Split-Path -Qualifier $settings.RepairedPath
+					$disk   = Get-PSDrive -Name $drive.TrimEnd(':') -ErrorAction Stop
+					$freeMB = [math]::Round($disk.Free / 1MB, 2)
+
+					if ($freeMB -lt $neededMB) {
+						$addMB = [math]::Round($neededMB - $freeMB, 2)
+						$msg   = "$Global:UM_MsgNoSpace`nNeeded: $(Format-MB $neededMB)`nAvailable: $(Format-MB $freeMB)`nAdditional: $(Format-MB $addMB)"
+						Send-Json $response @{ ok = $false; error = $msg }
+						continue
+					}
+				}
+				catch {
+					# Free space couldn't be determined (e.g. a UNC path) — fail open,
+					# don't block the run on a check we can't perform.
+				}
 			}
 
 			# ------------------[ START PIPELINE ]------------------ #
@@ -457,6 +484,10 @@ while ($true) {
                 if (Test-Path $Global:UnifiedMachineLogPath) {
                     "" | Set-Content -Path $Global:UnifiedMachineLogPath -Encoding UTF8
                 }
+                $selectionsPath = Join-Path $logsRoot "CompressionSelections.json"
+                if (Test-Path $selectionsPath) {
+                    Remove-Item -Path $selectionsPath -Force
+                }
                 $Global:UM_LogCache.Clear()
                 $Global:UM_LogCacheSize = 0
                 Send-Json $response @{ ok = $true }
@@ -465,7 +496,7 @@ while ($true) {
                 Send-Json $response @{ ok = $false; error = $_.Exception.Message }
             }
         }
-        
+		
 		"/config" {
 			Send-Json $response @{
                 ok = $true
@@ -546,6 +577,11 @@ while ($true) {
 
                 if (-not $payload.paths -or $payload.paths.Count -eq 0) {
                     Send-Json $response @{ ok = $false; error = "No paths in payload" }
+                    continue
+                }
+				
+				if (-not (Test-Path $payload.outputPath)) {
+                    Send-Json $response @{ ok = $false; error = "$Global:UM_MsgPathNotFound$($payload.outputPath)" }
                     continue
                 }
 

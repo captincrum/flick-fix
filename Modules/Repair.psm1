@@ -195,7 +195,7 @@ function Invoke-RepairStage {
         -SizeRatio      $attempt.SizeRatio `
         -ErrorsAfter    $attempt.ErrorsAfter
 
-    if ($repairedSize -gt ($originalSize * 1.5)) { return $false }
+    if ($repairedSize -gt ($originalSize * (UM-MaxSizeRatio))) { return $false }
     if ($exitCode -ne 0) { return $false }
 
     return ($attempt.ErrorsAfter.Count -eq 0)
@@ -350,7 +350,7 @@ function Invoke-UMRepair {
             }
 
             $hasQuality     = [bool]$lastQualityAfterAttempt
-            $hasHardFailure = ($lastAttempt.ErrorsAfter.Count -gt 0) -or ($lastAttempt.SizeRatio -gt 1.5)
+            $hasHardFailure = ($lastAttempt.ErrorsAfter.Count -gt 0) -or ($lastAttempt.SizeRatio -gt (UM-MaxSizeRatio))
 
             if (-not $hasQuality -and -not $hasHardFailure) {
                 $interrupted = $true

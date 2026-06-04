@@ -353,8 +353,7 @@ input[type="text"] {
 }
 
  .log-content.machine-log {
-    line-height: 1.6;
-	padding-bottom: 50px;
+    line-height: 1.55;
 }
 
 .log-footer {
@@ -572,6 +571,7 @@ input[type="text"] {
 
 #errorModal .modal-content p {
     text-align: center;
+	white-space: pre-line;
 }
 
 .modal-buttons {

@@ -786,6 +786,18 @@ Test-Case "Fit-output cap reads estimated compressed size" {
     $appContent -match 'dataset\.estmb'
 }
 
+Test-Case "Selections file stores only manual deviations, not every row" {
+    $appContent -match 'manual: window\._manualSelections' -and $appContent -match 'function _recordManual'
+}
+
+Test-Case "Selections file persists and restores the filter config" {
+    $appContent -match 'function _readFilterConfig' -and $appContent -match 'function _applyFilterConfig'
+}
+
+Test-Case "Filter re-applies sticky manual picks after filter/cap" {
+    $appContent -match 'sticky manual overrides' -and $appContent -match 'window\._manualSelections'
+}
+
 # ============================================================
 # SUITE 16: GPU Encoder Resolution (Common module)
 # Verifies UM-ResolveEncoder / UM-ResolveEncoderArgs contracts

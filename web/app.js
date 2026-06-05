@@ -789,23 +789,83 @@ function renderVirtualizedSlice(entries, anchorIndex) {
 async function saveCompressionSelections() {
     const tbody = document.getElementById("compressionTreeBody");
     if (!tbody) return;
-    const allRows = [...tbody.querySelectorAll("tr")];
-    const selections = {};
-    allRows.forEach(row => {
+
+    // Refresh the resolved-state cache used by toggleChildren when a folder expands
+    const cache = {};
+    [...tbody.querySelectorAll("tr")].forEach(row => {
         const cb = row.querySelector(".tree-checkbox");
-        if (row.dataset.path && cb) {
-            selections[row.dataset.path] = cb.checked;
-        }
+        if (row.dataset.path && cb) cache[row.dataset.path] = cb.checked;
     });
+    window._compressionSelections = cache;
 
-    // Keep window cache in sync
-    window._compressionSelections = selections;
-
+    // Persist only the user's deviations + the filter config (not all ~23k rows)
+    const payload = {
+        manual: window._manualSelections || {},
+        filter: _readFilterConfig()
+    };
     await fetch("/compression/selections/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(selections)
+        body: JSON.stringify(payload)
     });
+}
+
+function _readFilterConfig() {
+    return {
+        conf:     { high:   document.getElementById("filterConfHigh").checked,
+                    medium: document.getElementById("filterConfMedium").checked,
+                    low:    document.getElementById("filterConfLow").checked },
+        res:      { r720:  document.getElementById("filterRes720").checked,
+                    r1080: document.getElementById("filterRes1080").checked,
+                    r4k:   document.getElementById("filterRes4k").checked },
+        minMB:    document.getElementById("filterMinMB").value,
+        minPct:   document.getElementById("filterMinPct").value,
+        capMode:  document.getElementById("filterCapMode").value,
+        capValue: document.getElementById("filterCapValue").value
+    };
+}
+
+function _applyFilterConfig(f) {
+    if (f.conf && !document.getElementById("filterConfHigh").disabled) {
+        document.getElementById("filterConfHigh").checked   = !!f.conf.high;
+        document.getElementById("filterConfMedium").checked = !!f.conf.medium;
+        document.getElementById("filterConfLow").checked    = !!f.conf.low;
+    }
+    if (f.res) {
+        document.getElementById("filterRes720").checked  = !!f.res.r720;
+        document.getElementById("filterRes1080").checked = !!f.res.r1080;
+        document.getElementById("filterRes4k").checked   = !!f.res.r4k;
+    }
+    document.getElementById("filterMinMB").value    = f.minMB    != null ? f.minMB    : "";
+    document.getElementById("filterMinPct").value   = f.minPct   != null ? f.minPct   : "";
+    document.getElementById("filterCapMode").value  = f.capMode  || "none";
+    document.getElementById("filterCapValue").value = f.capValue != null ? f.capValue : "";
+    _onCapModeChange();   // updates cap unit/visibility AND re-runs the filter
+}
+
+function _anyFilterActive() {
+    if (document.getElementById("filterCapMode").value !== "none") return true;
+    if (_readFilterNum("filterMinMB", 1, 9999) !== null) return true;
+    if (_readFilterNum("filterMinPct", 10, 95) !== null) return true;
+    const r = ["filterRes720", "filterRes1080", "filterRes4k"].map(id => document.getElementById(id).checked);
+    if (!(r[0] && r[1] && r[2])) return true;
+    if (!document.getElementById("filterConfHigh").disabled) {
+        const c = ["filterConfHigh", "filterConfMedium", "filterConfLow"].map(id => document.getElementById(id).checked);
+        if (!(c[0] && c[1] && c[2])) return true;
+    }
+    return false;
+}
+
+function _recordManual(row, cb) {
+    const path = row.dataset.path;
+    if (!path || cb.disabled) return;            // skip/disabled rows are never recorded
+    window._manualSelections = window._manualSelections || {};
+    const bit = cb.checked ? 1 : 0;
+    if (bit === 1 && !_anyFilterActive()) {
+        delete window._manualSelections[path];   // back to verdict default, no filter -> forget it
+    } else {
+        window._manualSelections[path] = bit;
+    }
 }
 
 async function loadCompressionSelections() {
@@ -1560,6 +1620,15 @@ function renderTree(node, level, tbody, parentCheckbox) {
                 cb._folderState = "smart";
                 setChildrenCheckedSmart(tbody, idx, level, "smart");
             }
+            // record each affected eligible leaf as a per-file deviation (rollup happens later, in Half B)
+            const _allRowsM = [...tbody.querySelectorAll("tr")];
+            const _idxM = _allRowsM.indexOf(tr);
+            for (let i = _idxM + 1; i < _allRowsM.length; i++) {
+                const rl = parseInt([..._allRowsM[i].classList].find(c => c.startsWith("level-"))?.replace("level-", "") || "0");
+                if (rl <= level) break;
+                const lcb = _allRowsM[i].querySelector(".tree-checkbox");
+                if (_allRowsM[i].dataset.path && lcb && !lcb.disabled) _recordManual(_allRowsM[i], lcb);
+            }
             updateCompressionSummary();
             saveCompressionSelections();
             syncParentCheckboxes(tbody);
@@ -1568,6 +1637,7 @@ function renderTree(node, level, tbody, parentCheckbox) {
 
     if (parentCheckbox) {
         cb.addEventListener("change", () => {
+            if (tr.dataset.path) _recordManual(tr, cb);   // record the user's per-file deviation
             updateCompressionSummary();
             saveCompressionSelections();
             syncParentCheckboxes(tbody);
@@ -1751,7 +1821,7 @@ function _stepFilterNum(id, dir) {
     const min = parseInt(el.min, 10);
     const max = parseInt(el.max, 10);
     let cur = parseInt(el.value, 10);
-    if (isNaN(cur)) cur = 0;                       // blank: a step up lands on the step value
+    if (isNaN(cur)) { el.value = (dir > 0 ? min : min); applyCompressionFilter(); return; }  // blank: first click lands on min
     el.value = Math.max(min, Math.min(max, cur + dir * step));
     applyCompressionFilter();
 }
@@ -1826,6 +1896,7 @@ function applyCompressionFilter() {
         if (capVal !== null) {
             eligible.sort((a, b) => (parseFloat(b.dataset.savedmb) || 0) - (parseFloat(a.dataset.savedmb) || 0));
             if (capMode === "topn") {
+                console.log("capVal =", capVal, "eligible =", eligible.length);
                 eligible.slice(capVal).forEach(row => row.querySelector(".tree-checkbox").checked = false);
             } else if (capMode === "reclaim") {
                 const targetMB = capVal * 1024;            // GB -> MB
@@ -1845,6 +1916,16 @@ function applyCompressionFilter() {
                 }
             }
         }
+    }
+
+    // Pass 3 - sticky manual overrides survive filter/cap changes
+    const manual = window._manualSelections || {};
+    for (const row of tbody.querySelectorAll("tr[data-path]")) {
+        const cb = row.querySelector(".tree-checkbox");
+        if (!cb || cb.disabled) continue;
+        const m = manual[row.dataset.path];
+        if (m === 0) cb.checked = false;
+        else if (m === 1) cb.checked = true;
     }
 
     syncParentCheckboxes(tbody);
@@ -1969,6 +2050,7 @@ async function showCompressionModal() {
 	expandedNodes.clear();
     tbody.innerHTML = "";
     renderTree(root, 0, tbody, null);
+    window._compressionSelections = {};   // empty cache so the initial expand doesn't reapply stale state
 
     // Expand root by default FIRST so rows are visible
     const firstToggle = tbody.querySelector(".tree-toggle");
@@ -2003,21 +2085,10 @@ async function showCompressionModal() {
         </div>
     `;
 
-	// Store selections globally so toggleChildren can reapply them
-    window._compressionSelections = savedSelections;
-
-    if (Object.keys(savedSelections).length > 0) {
-        const allRows = [...tbody.querySelectorAll("tr")];
-        allRows.forEach(row => {
-            const cb = row.querySelector(".tree-checkbox");
-            if (!cb || !row.dataset.path) return;
-            if (savedSelections.hasOwnProperty(row.dataset.path)) {
-                cb.checked = savedSelections[row.dataset.path];
-            }
-        });
-        updateCompressionSummary();
-		syncParentCheckboxes(tbody);
-    }
+	// Manual deviations are restored after initCompressionFilter (below), so the
+    // confidence data-gate doesn't clobber the saved filter boxes.
+    window._manualSelections = (savedSelections && savedSelections.manual && typeof savedSelections.manual === "object")
+        ? { ...savedSelections.manual } : {};
 
 	const savedOutput = await fetch("/config").then(r => r.json());
     if (savedOutput.ok && savedOutput.config.CompressionOutputPath) {
@@ -2027,6 +2098,13 @@ async function showCompressionModal() {
     modal.classList.remove("hidden");
     initColumnResize();
     initCompressionFilter();
+
+    // Restore saved filter config; this runs the filter, which re-applies sticky manual picks.
+    if (savedSelections && savedSelections.filter) {
+        _applyFilterConfig(savedSelections.filter);
+    } else {
+        applyCompressionFilter();
+    }
 }
 
 document.getElementById("compressionClose").addEventListener("click", () => {

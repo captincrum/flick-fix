@@ -5,7 +5,88 @@ const BASE_URL = 'http://localhost:17863';
 // ================================================================
 // HELPERS
 // ================================================================
+const fs = require('fs');
+const path = require('path');
 
+// Adjust if ui_spec.js doesn't sit next to the Logs/ folder.
+const UNIFIED_LOG = path.resolve(__dirname, '..', 'Logs', 'UnifiedLog.json');
+
+// 10 Compress + 2 Skip, across 2 shows / 3 seasons. Each row is tagged with
+// what it exercises so future assertions are obvious.
+const PROBE_FIXTURE = [
+  // Alpha Series / Season 01
+  { Type:"SmartProbe", Path:"T:\\Media\\Alpha Series\\Season 01\\Alpha S01E01.mkv", Verdict:"Compress", Confidence:"High",   Width:1920, OriginalMB:3300, EstimatedMB:900,  SavedMB:2400, SavedPct:72.7 }, // High · 1080p · biggest saver
+  { Type:"SmartProbe", Path:"T:\\Media\\Alpha Series\\Season 01\\Alpha S01E02.mkv", Verdict:"Compress", Confidence:"Medium", Width:1920, OriginalMB:2700, EstimatedMB:1200, SavedMB:1500, SavedPct:55.6 }, // Medium · 1080p
+  { Type:"SmartProbe", Path:"T:\\Media\\Alpha Series\\Season 01\\Alpha S01E03.mkv", Verdict:"Compress", Confidence:"Low",    Width:1280, OriginalMB:860,  EstimatedMB:560,  SavedMB:300,  SavedPct:34.9 }, // Low · ≤720p bucket (1280)
+  { Type:"SmartProbe", Path:"T:\\Media\\Alpha Series\\Season 01\\Alpha S01E04.mkv", Verdict:"Compress", Confidence:"High",   Width:3840, OriginalMB:5000, EstimatedMB:2000, SavedMB:3000, SavedPct:60.0 }, // High · 4K · top saver
+  { Type:"SmartProbe", Path:"T:\\Media\\Alpha Series\\Season 01\\Alpha S01E05.mkv", Verdict:"Skip",     Confidence:"N/A",    Width:1920, OriginalMB:1800, EstimatedMB:1800, SavedMB:0,    SavedPct:0,  SkipReason:"AlreadyModernCodec", Codec:"hevc" }, // SKIP (already HEVC)
+
+  // Beta Show / Season 01
+  { Type:"SmartProbe", Path:"T:\\Media\\Beta Show\\Season 01\\Beta S01E01.mkv",     Verdict:"Compress", Confidence:"High",   Width:720,  OriginalMB:660,  EstimatedMB:540,  SavedMB:120,  SavedPct:18.2 }, // High · ≤720p (true 720) · smallest saver
+  { Type:"SmartProbe", Path:"T:\\Media\\Beta Show\\Season 01\\Beta S01E02.mkv",     Verdict:"Compress", Confidence:"Medium", Width:4096, OriginalMB:2000, EstimatedMB:1100, SavedMB:900,  SavedPct:45.0 }, // Medium · 4K
+  { Type:"SmartProbe", Path:"T:\\Media\\Beta Show\\Season 01\\Beta S01E03.mkv",     Verdict:"Compress", Confidence:"Low",    Width:2560, OriginalMB:1500, EstimatedMB:900,  SavedMB:600,  SavedPct:40.0 }, // Low · 1080p top edge (2560)
+  { Type:"SmartProbe", Path:"T:\\Media\\Beta Show\\Season 01\\Beta S01E04.mkv",     Verdict:"Skip",     Confidence:"N/A",    Width:1280, OriginalMB:500,  EstimatedMB:480,  SavedMB:20,   SavedPct:4.0, SkipReason:"SavingsBelowThreshold" }, // SKIP (<10%)
+
+  // Beta Show / Season 02  (second season -> tests multi-season folder counts)
+  { Type:"SmartProbe", Path:"T:\\Media\\Beta Show\\Season 02\\Beta S02E01.mkv",     Verdict:"Compress", Confidence:"High",   Width:1920, OriginalMB:3600, EstimatedMB:1800, SavedMB:1800, SavedPct:50.0 }, // High · 1080p
+  { Type:"SmartProbe", Path:"T:\\Media\\Beta Show\\Season 02\\Beta S02E02.mkv",     Verdict:"Compress", Confidence:"Medium", Width:1024, OriginalMB:1500, EstimatedMB:1050, SavedMB:450,  SavedPct:30.0 }, // Medium · ≤720p (1024)
+  { Type:"SmartProbe", Path:"T:\\Media\\Beta Show\\Season 02\\Beta S02E03.mkv",     Verdict:"Compress", Confidence:"Low",    Width:7680, OriginalMB:3600, EstimatedMB:1500, SavedMB:2100, SavedPct:58.3 }, // Low · 8K -> proves it lands in ≥4K
+];
+
+// Dedicated to cap-mode tests: 12 eligible + 1 skip. savedMB descending and
+// distinct so the cap boundaries are exact and each mode yields a DIFFERENT count.
+//  - Top savers (min 10) -> keeps 10 of 12
+//  - Total saved 10 GB   -> 3+2.5+2+1.5+1 GB = exactly 10 GB at the 5th row -> 5
+//  - Size after 10 GB    -> est 1400 MB each; 7 fit under 10 GB (9800), 8th overflows -> 7
+const CAP_FIXTURE = [
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E01.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:4472, EstimatedMB:1400, SavedMB:3072, SavedPct:68.7 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E02.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:3960, EstimatedMB:1400, SavedMB:2560, SavedPct:64.6 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E03.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:3448, EstimatedMB:1400, SavedMB:2048, SavedPct:59.4 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E04.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:2936, EstimatedMB:1400, SavedMB:1536, SavedPct:52.3 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E05.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:2424, EstimatedMB:1400, SavedMB:1024, SavedPct:42.2 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E06.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:2296, EstimatedMB:1400, SavedMB:896,  SavedPct:39.0 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E07.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:2168, EstimatedMB:1400, SavedMB:768,  SavedPct:35.4 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E08.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:2040, EstimatedMB:1400, SavedMB:640,  SavedPct:31.4 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E09.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:1912, EstimatedMB:1400, SavedMB:512,  SavedPct:26.8 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E10.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:1784, EstimatedMB:1400, SavedMB:384,  SavedPct:21.5 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E11.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:1656, EstimatedMB:1400, SavedMB:256,  SavedPct:15.5 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E12.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:1528, EstimatedMB:1400, SavedMB:128,  SavedPct:8.4 },
+  { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E13.mkv", Verdict:"Skip", Confidence:"N/A", Width:1920, OriginalMB:800, EstimatedMB:800, SavedMB:0, SavedPct:0, SkipReason:"AlreadyModernCodec", Codec:"hevc" },
+];
+
+// Write the fixture to the live log and wait for the server's cache to pick it up.
+async function seedProbeLog(page, entries) {
+  await page.request.get(`${BASE_URL}/logs/clear`);            // empty file + cache
+  fs.mkdirSync(path.dirname(UNIFIED_LOG), { recursive: true }); // ensure Logs/ exists
+  fs.writeFileSync(UNIFIED_LOG, entries.map(e => JSON.stringify(e)).join('\n') + '\n', 'utf8');
+  // Update-LogCache debounces ~1s; poll /logs/total until it reflects our rows.
+  await expect.poll(async () => {
+    const r = await page.request.get(`${BASE_URL}/logs/total`);
+    return (await r.json()).total;
+  }, { timeout: 6000, intervals: [300, 400, 600, 800, 1000] }).toBe(entries.length);
+}
+
+async function openReview(page) {
+  await selectMode(page, 'SmartCompression');
+  await expect(page.locator('#reviewBtn')).not.toHaveClass(/disabled-ui/, { timeout: 6000 });
+  await page.locator('#reviewBtn').click();
+  await expect(page.locator('#compressionModal')).toBeVisible();
+}
+
+// Shows start collapsed; open every visible ▶ toggle until the whole tree is expanded.
+async function expandAll(page) {
+  for (let guard = 0; guard < 50; guard++) {
+    const toggle = page.locator('#compressionTreeBody .tree-toggle:visible', { hasText: '▶' }).first();
+    if (await toggle.count() === 0) break;
+    await toggle.click();
+  }
+}
+
+// A leaf row's checkbox, located by its file name.
+const leafCb = (page, fileName) =>
+  page.locator('#compressionTreeBody tr', { has: page.locator('.tree-name', { hasText: fileName }) })
+      .locator('.tree-checkbox');
+	  
 async function resetConfig(page) {
     await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false`);
     await page.goto(BASE_URL);
@@ -19,6 +100,11 @@ async function selectMode(page, mode) {
     await page.locator(`input[value="${mode}"]`).click();
 }
 
+// A folder row's "(x of y)" count, located by the folder name.
+const folderCount = (page, name) =>
+  page.locator('#compressionTreeBody tr', { has: page.locator('.tree-name', { hasText: name }) })
+      .locator('.tree-count');
+	  
 // ================================================================
 // SUITE 1: Page Load
 // ================================================================
@@ -1207,4 +1293,205 @@ test.describe('Path Not-Found Validation', () => {
         expect(body.error).toContain('Z:\\nope_compressed');
     });
 
+});
+
+// ================================================================
+// SUITE 19: Automated UnifiedLog
+// ================================================================
+test.describe('Compression Review — seeded tree', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetConfig(page);
+    await seedProbeLog(page, PROBE_FIXTURE);
+    await openReview(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.request.get(`${BASE_URL}/logs/clear`);          // leave no fixture behind
+  });
+
+  test('tree renders one row per seeded file', async ({ page }) => {
+    const leafRows = page.locator('#compressionTreeBody tr[data-path]');
+    await expect(leafRows).toHaveCount(PROBE_FIXTURE.length);   // 12 leaves, collapsed or not
+  });
+  
+  // Helper used by every assertion below: leaf checkboxes currently selected.
+  // (Folders have no data-path; collapsed rows still count — we're testing
+  //  logical selection, not visibility.)
+  const checkedLeaves = page =>
+    page.locator('#compressionTreeBody tr[data-path] .tree-checkbox:checked');
+
+  test('all eligible rows checked by default; the 2 skips excluded', async ({ page }) => {
+    await expect(checkedLeaves(page)).toHaveCount(10);   // 10 Compress, 2 Skip stay off/disabled
+  });
+
+  test('unchecking Low confidence drops exactly the 3 Low rows', async ({ page }) => {
+    await page.locator('#filterConfLow').uncheck();
+    await expect(checkedLeaves(page)).toHaveCount(7);     // 10 - 3 Low
+    await page.locator('#filterConfLow').check();         // and it comes back
+    await expect(checkedLeaves(page)).toHaveCount(10);
+  });
+
+  test('unchecking ≤720p drops the ≤1280px-width rows', async ({ page }) => {
+    await page.locator('#filterRes720').uncheck();
+    await expect(checkedLeaves(page)).toHaveCount(7);     // E03(1280), B-S01E01(720), B-S02E02(1024)
+  });
+
+  test('minimum savings of 1000 MB keeps only the bigger savers', async ({ page }) => {
+    await page.locator('#filterMinMB').fill('1000');
+    await expect(checkedLeaves(page)).toHaveCount(5);     // savedMB ≥ 1000: 2400,1500,3000,1800,2100
+  });
+
+  test('minimum savings of 50% keeps only the higher-ratio rows', async ({ page }) => {
+    await page.locator('#filterMinPct').fill('50');
+    await expect(checkedLeaves(page)).toHaveCount(5);     // savedPct ≥ 50: 72.7,55.6,60,50,58.3
+  });
+
+  test('Reset Defaults restores all eligible rows', async ({ page }) => {
+    await page.locator('#filterConfLow').uncheck();
+    await page.locator('#filterMinMB').fill('1500');
+    await expect(checkedLeaves(page)).not.toHaveCount(10);
+    await page.locator('#filterReset').click();
+    await expect(checkedLeaves(page)).toHaveCount(10);
+  });
+  
+test('a manually unchecked row stays off through a filter change', async ({ page }) => {
+    await expandAll(page);
+    await leafCb(page, 'Alpha S01E01.mkv').uncheck();              // force-OFF (records 0)
+    await expect(leafCb(page, 'Alpha S01E01.mkv')).not.toBeChecked();
+
+    await page.locator('#filterMinMB').fill('100');               // re-runs filter; this row matches
+
+    await expect(leafCb(page, 'Alpha S01E01.mkv')).not.toBeChecked(); // override held by Pass 3
+    await expect(checkedLeaves(page)).toHaveCount(9);                 // 10 eligible - 1 forced off
+  });
+
+  test('a manually re-checked row survives a filter that would exclude it', async ({ page }) => {
+    await expandAll(page);
+
+    await page.locator('#filterConfLow').uncheck();               // filter out the 3 Low rows
+    await expect(leafCb(page, 'Alpha S01E03.mkv')).not.toBeChecked();
+
+    await leafCb(page, 'Alpha S01E03.mkv').check();               // force-ON while filter active (records 1)
+    await expect(leafCb(page, 'Alpha S01E03.mkv')).toBeChecked();
+
+    await page.locator('#filterMinMB').fill('100');               // re-runs filter; Low still off
+
+    await expect(leafCb(page, 'Alpha S01E03.mkv')).toBeChecked();      // override holds it on
+    await expect(leafCb(page, 'Beta S01E03.mkv')).not.toBeChecked();   // other Low rows: still off
+    await expect(leafCb(page, 'Beta S02E03.mkv')).not.toBeChecked();   // proves it's per-file, not global
+  });
+  
+  test('Reset Filters clears the filter but keeps manual overrides', async ({ page }) => {
+    await expandAll(page);
+    await leafCb(page, 'Alpha S01E01.mkv').uncheck();          // manual force-off
+    await page.locator('#filterMinMB').fill('1500');           // plus a filter
+    await page.locator('#filterReset').click();
+    await expect(page.locator('#filterMinMB')).toHaveValue('');        // filter cleared
+    await expect(leafCb(page, 'Alpha S01E01.mkv')).not.toBeChecked();  // pick kept
+    await expect(checkedLeaves(page)).toHaveCount(9);
+  });
+
+  test('Reset Checkboxes clears manual picks but keeps the active filter', async ({ page }) => {
+    await expandAll(page);
+    await page.locator('#filterConfLow').uncheck();            // filter active: Low out -> 7
+    await leafCb(page, 'Alpha S01E01.mkv').uncheck();          // manual force-off a High row -> 6
+    await expect(checkedLeaves(page)).toHaveCount(6);
+    await page.locator('#filterResetChecks').click();
+    await expect(page.locator('#filterConfLow')).not.toBeChecked();    // filter still active
+    await expect(leafCb(page, 'Alpha S01E01.mkv')).toBeChecked();      // pick undone
+    await expect(checkedLeaves(page)).toHaveCount(7);                 // pure Low-off result
+  });
+  
+  test('folder counts show all eligible selected by default; skips excluded', async ({ page }) => {
+    await expect(folderCount(page, 'All Media')).toContainText('10 of 10');   // 10 compress, 2 skips NOT counted
+    await expect(folderCount(page, 'Alpha Series')).toContainText('4 of 4');
+    await expect(folderCount(page, 'Beta Show')).toContainText('6 of 6');
+  });
+
+  test('counts update when a filter unchecks rows (denominator stays put)', async ({ page }) => {
+    await page.locator('#filterConfLow').uncheck();                 // drops the 3 Low rows
+    await expect(folderCount(page, 'All Media')).toContainText('7 of 10');   // selected fell, available held
+    await expect(folderCount(page, 'Alpha Series')).toContainText('3 of 4'); // 1 Low here
+    await expect(folderCount(page, 'Beta Show')).toContainText('4 of 6');    // 2 Low here
+  });
+
+  test('counts update when a single file is unchecked', async ({ page }) => {
+    await expandAll(page);
+    await leafCb(page, 'Alpha S01E01.mkv').uncheck();
+    await expect(folderCount(page, 'Alpha Series')).toContainText('3 of 4');
+    await expect(folderCount(page, 'All Media')).toContainText('9 of 10');
+  });
+  
+  test('summary file count tracks the selection', async ({ page }) => {
+    await expect(page.locator('#sumEpisodes')).toHaveText('10');    // all eligible
+    await page.locator('#filterConfLow').uncheck();
+    await expect(page.locator('#sumEpisodes')).toHaveText('7');     // recomputed
+  });
+
+  test('summary size totals shrink when the selection shrinks', async ({ page }) => {
+    const toMB = async (sel) => {
+      const t = (await page.locator(sel).textContent()).trim();
+      const n = parseFloat(t) || 0;
+      return t.includes('TB') ? n*1024*1024 : t.includes('GB') ? n*1024 : n;
+    };
+    const beforeAll = await toMB('#sumBefore');
+    await page.locator('#filterConfLow').uncheck();
+    await expect(page.locator('#sumEpisodes')).toHaveText('7');     // sync point: recompute done
+    expect(await toMB('#sumBefore')).toBeLessThan(beforeAll);       // fewer files -> smaller total
+  });
+
+  test('summary zeroes out when nothing qualifies', async ({ page }) => {
+    await page.locator('#filterMinPct').fill('95');                 // nothing saves >=95%
+    await expect(page.locator('#sumEpisodes')).toHaveText('0');
+  });
+  
+});
+
+// ================================================================
+// SUITE 20: Automated UnifiedLog Cap modes
+// ================================================================
+test.describe('Compression Review — cap modes', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetConfig(page);
+    await seedProbeLog(page, CAP_FIXTURE);
+    await openReview(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.request.get(`${BASE_URL}/logs/clear`);
+  });
+
+  // Same helper as the predicate block; redefined here for block scope.
+  const checkedLeaves = page =>
+    page.locator('#compressionTreeBody tr[data-path] .tree-checkbox:checked');
+
+  test('all 12 eligible checked by default; the skip is excluded', async ({ page }) => {
+    await expect(checkedLeaves(page)).toHaveCount(12);
+  });
+
+  test('Top savers trims to the N biggest savers', async ({ page }) => {
+    await page.locator('#filterCapMode').selectOption('topn');
+    await page.locator('#filterCapValue').fill('10');   // min is 10 -> keeps top 10 of 12
+    await expect(checkedLeaves(page)).toHaveCount(10);
+  });
+
+  test('Total saved keeps just enough top savers to hit the target', async ({ page }) => {
+    await page.locator('#filterCapMode').selectOption('reclaim');
+    await page.locator('#filterCapValue').fill('10');   // 10 GB reached exactly at the 5th row
+    await expect(checkedLeaves(page)).toHaveCount(5);
+  });
+
+  test('Size after keeps the biggest savers that fit under the output budget', async ({ page }) => {
+    await page.locator('#filterCapMode').selectOption('fit');
+    await page.locator('#filterCapValue').fill('10');   // 10 GB / 1400 MB each -> 7 fit
+    await expect(checkedLeaves(page)).toHaveCount(7);
+  });
+
+  test('switching cap back to No limit restores all eligible', async ({ page }) => {
+    await page.locator('#filterCapMode').selectOption('topn');
+    await page.locator('#filterCapValue').fill('10');
+    await expect(checkedLeaves(page)).toHaveCount(10);
+    await page.locator('#filterCapMode').selectOption('none');
+    await expect(checkedLeaves(page)).toHaveCount(12);
+  });
 });

@@ -1954,6 +1954,11 @@ function resetCompressionFilter() {
     _onCapModeChange();
 }
 
+function resetCompressionCheckboxes() {
+    window._manualSelections = {};   // drop hand-picked deviations; keep the active filter
+    applyCompressionFilter();        // re-derive selection from the filter alone (Pass 3 now no-ops)
+}
+
 function initCompressionFilter() {
     const tbody = document.getElementById("compressionTreeBody");
     if (!tbody) return;
@@ -1987,6 +1992,7 @@ function initCompressionFilter() {
     document.getElementById("filterCapValue").addEventListener("input", _debounceFilter);
     document.getElementById("filterCapValue").addEventListener("blur", () => _clampFilterBox(document.getElementById("filterCapValue")));
     document.getElementById("filterReset").addEventListener("click", resetCompressionFilter);
+	document.getElementById("filterResetChecks").addEventListener("click", resetCompressionCheckboxes);
 }
 
 function initColumnResize() {

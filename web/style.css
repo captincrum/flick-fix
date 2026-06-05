@@ -1108,3 +1108,9 @@ input[type="text"] {
     background: #2a68e0;
     color: white;
 }
+
+#filterResetChecks,
+#filterReset {
+	min-width: 105px;
+	max-width: 105px;
+}

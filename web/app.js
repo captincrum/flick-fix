@@ -1513,7 +1513,7 @@ function renderTree(node, level, tbody, parentCheckbox) {
     if (isLeaf) {
         const isCompress = node.verdict === "Compress";
         tdVerdict.className += " " + (isCompress ? "verdict-compress" : "verdict-skip");
-        let label = isCompress ? "Compress" : "Skip";
+        let label = isCompress ? "Confidence" : "Skip";
         if (isCompress && node.confidence && node.confidence !== "N/A") {
             label += ` (${node.confidence})`;
         }
@@ -1532,9 +1532,11 @@ function renderTree(node, level, tbody, parentCheckbox) {
 		}
         tdVerdict.textContent = label;
     } else {
-        const vs = verdictSummary(node.verdicts);
-        tdVerdict.className += " " + vs.cls;
-        tdVerdict.textContent = vs.label;
+        // Folder rows show the live "selected of available" count here;
+        // syncParentCheckboxes fills it and keeps it current.
+        const countSpan = document.createElement("span");
+        countSpan.className = "tree-count";
+        tdVerdict.appendChild(countSpan);
     }
     tr.appendChild(tdVerdict);
 
@@ -1788,6 +1790,12 @@ function syncParentCheckboxes(tbody) {
         const checkedCount = descLeaves.filter(r => r.querySelector(".tree-checkbox")?.checked).length;
         cb.checked = checkedCount === descLeaves.length;
         cb.indeterminate = checkedCount > 0 && checkedCount < descLeaves.length;
+
+        // Live "selected of available" count beside the folder name.
+        // Available = eligible leaves (skips have disabled checkboxes, so excluded).
+        const eligibleCount = descLeaves.filter(r => !r.querySelector(".tree-checkbox")?.disabled).length;
+        const countEl = row.querySelector(".tree-count");
+        if (countEl) countEl.textContent = eligibleCount > 0 ? ` (${checkedCount} of ${eligibleCount})` : "";
     }
 }
 
@@ -1997,7 +2005,8 @@ function initColumnResize() {
 
         const onMove = e => {
             const wrapper = document.querySelector(".compression-tree-wrapper");
-            const maxW = wrapper.getBoundingClientRect().width - 200 - 130 - 40;
+            const verdictW = document.querySelector(".tree-th-verdict").getBoundingClientRect().width;
+            const maxW = wrapper.getBoundingClientRect().width - 200 - verdictW - 40;
             const newW = Math.max(120, Math.min(maxW, startW + (e.clientX - startX)));
             col.style.width = newW + "px";
         };
@@ -2014,6 +2023,42 @@ function initColumnResize() {
         e.stopPropagation();
         e.preventDefault();
     });
+
+    // ---- Verdict column: right edge pinned to the table; Name absorbs the change ----
+    const vth      = document.querySelector(".tree-th-verdict");
+    const vcol     = document.getElementById("colVerdict");
+    const vResizer = document.getElementById("verdictResizer");
+    if (vth && vcol && vResizer) {
+        let vStartX, vStartW;
+        vResizer.addEventListener("mousedown", e => {
+            vStartX = e.clientX;
+            vStartW = vth.getBoundingClientRect().width;
+            vResizer.classList.add("resizing");
+            document.body.classList.add("no-select");
+
+            const onMove = e => {
+                const wrapper = document.querySelector(".compression-tree-wrapper");
+                const budget  = wrapper.getBoundingClientRect().width - 40;   // Size(200) + Name + Verdict
+                const maxVerdictW = budget - 200 - 120;                       // keep Name >= 120
+                // Drag left = wider Verdict; Name shrinks to compensate so the right edge stays put.
+                const newVerdictW = Math.max(100, Math.min(maxVerdictW, vStartW + (vStartX - e.clientX)));
+                vcol.style.width = newVerdictW + "px";
+                col.style.width  = (budget - 200 - newVerdictW) + "px";
+            };
+
+            const onUp = () => {
+                vResizer.classList.remove("resizing");
+                document.body.classList.remove("no-select");
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+            };
+
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("mouseup", onUp);
+            e.stopPropagation();
+            e.preventDefault();
+        });
+    }
 }
 
 async function showCompressionModal() {
@@ -2052,12 +2097,10 @@ async function showCompressionModal() {
     renderTree(root, 0, tbody, null);
     window._compressionSelections = {};   // empty cache so the initial expand doesn't reapply stale state
 
-    // Expand root by default FIRST so rows are visible
+    // Expand only the root ("All Media"); Movies/Shows start collapsed
     const firstToggle = tbody.querySelector(".tree-toggle");
     if (firstToggle) {
         firstToggle.click();
-        const secondToggle = tbody.querySelectorAll(".tree-toggle")[1];
-        if (secondToggle) secondToggle.click();
     }
 
     // Summary HTML (full totals as baseline)

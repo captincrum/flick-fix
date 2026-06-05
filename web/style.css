@@ -975,8 +975,8 @@ input[type="text"] {
 	z-index: 10;
 }
 
-.tree-th-size { text-align: right; }
-.tree-th-verdict { text-align: right; padding-right: 32px; }
+.tree-th-size { text-align: left; }
+.tree-th-verdict { text-align: left; padding-right: 32px; }
 
 .tree-td {
     padding: 3px 12px;
@@ -987,14 +987,14 @@ input[type="text"] {
 }
 
 .tree-td-size {
-    text-align: right;
+    text-align: left;
     color: var(--text-muted);
     font-size: 12px;
     padding-right: 16px;
 }
 
 .tree-td-verdict {
-    text-align: right;
+    text-align: left;
     font-size: 12px;
     padding-right: 32px;
 }
@@ -1049,6 +1049,11 @@ input[type="text"] {
 
 .tree-name.is-folder { font-weight: 500; }
 
+.tree-count {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
 .verdict-compress       { color: #4caf82; }
 .verdict-skip           { color: var(--text-muted); }
 .verdict-skip-grain     { color: #f0b429; }
@@ -1077,6 +1082,19 @@ input[type="text"] {
 .col-resizer:hover,
 .col-resizer.resizing {
     border-right: 2px solid var(--accent-strong);
+}
+
+.col-resizer-left {
+    left: 0;
+    right: auto;
+    border-right: none;
+    border-left: 2px dashed rgba(255,255,255,0.3);
+}
+
+.col-resizer-left:hover,
+.col-resizer-left.resizing {
+    border-left: 2px solid var(--accent-strong);
+    border-right: none;
 }
 
 #errorOk {

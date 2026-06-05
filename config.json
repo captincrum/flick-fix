@@ -1,12 +1,12 @@
 ﻿{
     "RootPath":  "",
     "RepairedPath":  "",
-    "Mode":  "SmartCompression",
+    "Mode":  "Full",
     "ScanAllEpisodes":  false,
     "AccurateMode":  false,
     "CompressionOutputPath":  "F:\\",
     "CrfValue":  22,
-    "Workers":  4,
+    "Workers":  2,
     "UseGPU":  false,
     "RunMode":  "SmartCompression"
 }

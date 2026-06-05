@@ -798,6 +798,20 @@ Test-Case "Filter re-applies sticky manual picks after filter/cap" {
     $appContent -match 'sticky manual overrides' -and $appContent -match 'window\._manualSelections'
 }
 
+Test-Case "Tree folder rows render a live selected/available count" {
+    $appContent -match 'tree-count' -and $appContent -match 'of \$\{eligibleCount\}'
+}
+
+Test-Case "Folder rows render a live count in the verdict cell" {
+    $appContent -match 'tree-count' -and $appContent -match 'of \$\{eligibleCount\}'
+}
+Test-Case "Leaf verdict shows Confidence label" {
+    $appContent -match 'Confidence" : "Skip"'
+}
+Test-Case "Verdict column has a resize handler" {
+    $appContent -match 'verdictResizer'
+}
+
 # ============================================================
 # SUITE 16: GPU Encoder Resolution (Common module)
 # Verifies UM-ResolveEncoder / UM-ResolveEncoderArgs contracts
@@ -1150,6 +1164,10 @@ Test-Case "style.css has .gpu-toggle-group" {
 
 Test-Case "style.css has .desc-row" {
     $styleContent -match '\.desc-row'
+}
+
+Test-Case "style.css has .tree-count" {
+    $styleContent -match '\.tree-count'
 }
 
 # Cleanup test log directory

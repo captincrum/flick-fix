@@ -218,13 +218,13 @@
 
 					<div class="filter-cols">
 						<div class="filter-col" id="filterConfCol">
-							<label class="comp-label">Confidence</label>
+							<label class="comp-label">Confidence Level</label>
 							<label class="filter-check"><input type="checkbox" id="filterConfHigh" checked /> High</label>
 							<label class="filter-check"><input type="checkbox" id="filterConfMedium" checked /> Medium</label>
 							<label class="filter-check"><input type="checkbox" id="filterConfLow" checked /> Low</label>
 						</div>
 						<div class="filter-col">
-							<label class="comp-label">Resolution</label>
+							<label class="comp-label">Video Resolution</label>
 							<label class="filter-check"><input type="checkbox" id="filterRes720" checked /> ≤720p</label>
 							<label class="filter-check"><input type="checkbox" id="filterRes1080" checked /> 1080p</label>
 							<label class="filter-check"><input type="checkbox" id="filterRes4k" checked /> ≥4K</label>
@@ -232,7 +232,7 @@
 					</div>
 
 					<div class="filter-section filter-row-inline">
-						<label class="comp-label">Minimum saving</label>
+						<label class="comp-label">Minimum savings of</label>
 						<div class="num-field">
 							<div class="num-stepper">
 								<input type="number" id="filterMinMB" min="1" max="9999" step="10" placeholder="—" />
@@ -246,7 +246,7 @@
 					</div>
 
 					<div class="filter-section filter-row-inline">
-						<label class="comp-label">Minimum space saved</label>
+						<label class="comp-label">Minimum savings of</label>
 						<div class="num-field">
 							<div class="num-stepper">
 								<input type="number" id="filterMinPct" min="10" max="95" step="1" placeholder="—" />
@@ -261,10 +261,10 @@
 
 					<div class="filter-section filter-row-inline">
 						<select id="filterCapMode" class="filter-select">
-							<option value="none">Cap selection</option>
+							<option value="none">No limit</option>
 							<option value="topn">Top savers</option>
-							<option value="reclaim">Save at least</option>
-							<option value="fit">Final size is</option>
+							<option value="reclaim">Total saved</option>
+							<option value="fit">Size after</option>
 						</select>
 						<div class="num-field hidden" id="filterCapField">
 							<div class="num-stepper">
@@ -297,9 +297,9 @@
                 <div class="card group compression-tree-wrapper">
                     <table id="compressionTree" class="compression-tree">
                         <colgroup>
-                            <col id="colName" />
-                            <col id="colSize" style="width: 200px;" />
-                            <col id="colVerdict" style="width: 130px;" />
+                            <col id="colName" style="width: 55%;" />
+                            <col id="colSize" style="width: 25%;" />
+                            <col id="colVerdict" style="width: 20%;" />
                         </colgroup>
                         <thead>
                             <tr>
@@ -308,7 +308,10 @@
                                     <div class="col-resizer" id="nameResizer"></div>
                                 </th>
                                 <th class="tree-th tree-th-size">Original &#8594; Compressed</th>
-                                <th class="tree-th tree-th-verdict">Verdict</th>
+                                <th class="tree-th tree-th-verdict">
+                                    <div class="col-resizer col-resizer-left" id="verdictResizer"></div>
+                                    Verdict
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="compressionTreeBody"></tbody>

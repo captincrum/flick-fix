@@ -2,6 +2,8 @@
 # Launches the FlickFix UI in an Edge app window when this script is run
 # directly, so the operator gets a window instead of a bare console.
 
+#Add-Type -Name Win32 -Namespace Console -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);' ; [Console.Win32]::ShowWindow((Get-Process -Id $PID).MainWindowHandle, 0)
+
 # Only open a window when run directly; skip when this file is dot-sourced.
 if ($MyInvocation.InvocationName -ne '.') {
     Start-Sleep -Milliseconds 250

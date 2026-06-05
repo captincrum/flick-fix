@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <title>FlickFix</title>
-	<link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -44,7 +44,7 @@
                         </div>
                     </div>
 
-					<div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
+                    <div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
                         <div style="display:flex; align-items:center; gap:10px; width:100%;">
                             <span class="toggle-label">Workers</span>
                             <input type="range" id="workerCount" min="1" max="8" value="4" style="flex:1;" />
@@ -53,7 +53,7 @@
                         <p id="workerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
                     </div>
 
-					<div class="toggle-row">
+                    <div class="toggle-row">
                         <div class="scan-toggle-group">
                             <span class="toggle-label">Quick</span>
                             <label class="toggle-switch">
@@ -79,40 +79,40 @@
                     </div>
                 </div>
 
-				<!-- MODE (radio buttons) -->
-				<div class="card group">
-					<h2 class="group-title">Operation Mode</h2>
-					<div class="mode-row" style="flex-wrap: wrap; row-gap: 6px;">
-						<label><input type="radio" name="mode" value="Full" checked /> Scan & Repair</label>
-						<label><input type="radio" name="mode" value="ScanOnly" /> Scan</label>
-						<label><input type="radio" name="mode" value="RepairOnly" /> Repair</label>
-						<label><input type="radio" name="mode" value="SmartCompression" /> Smart Compression</label>
-					</div>
-				</div>
+                <!-- MODE (radio buttons) -->
+                <div class="card group">
+                    <h2 class="group-title">Operation Mode</h2>
+                    <div class="mode-row" style="flex-wrap: wrap; row-gap: 6px;">
+                        <label><input type="radio" name="mode" value="Full" checked /> Scan & Repair</label>
+                        <label><input type="radio" name="mode" value="ScanOnly" /> Scan</label>
+                        <label><input type="radio" name="mode" value="RepairOnly" /> Repair</label>
+                        <label><input type="radio" name="mode" value="SmartCompression" /> Smart Compression</label>
+                    </div>
+                </div>
 
-				<!-- SMART COMPRESSION OPTIONS (hidden unless SmartCompression selected) -->
-				<div id="smartOptions" class="card group hidden">
-					<h2 class="group-title">Smart Compression Mode</h2>
-					<div class="toggle-row">
-						<span class="toggle-label">Fast</span>
-						<label class="toggle-switch">
-							<input type="checkbox" id="accurateMode" />
-							<span class="toggle-track"></span>
-						</label>
-						<span class="toggle-label">Accurate</span>
-						<button id="reviewBtn" class="btn small disabled-ui" style="margin-left: auto;">Review</button>
-					</div>
-					<p id="smartMethodDesc" class="smart-desc">Quick results across your entire library</p>
+                <!-- SMART COMPRESSION OPTIONS (hidden unless SmartCompression selected) -->
+                <div id="smartOptions" class="card group hidden">
+                    <h2 class="group-title">Smart Compression Mode</h2>
+                    <div class="toggle-row">
+                        <span class="toggle-label">Fast</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="accurateMode" />
+                            <span class="toggle-track"></span>
+                        </label>
+                        <span class="toggle-label">Accurate</span>
+                        <button id="reviewBtn" class="btn small disabled-ui" style="margin-left: auto;">Review</button>
+                    </div>
+                    <p id="smartMethodDesc" class="smart-desc">Quick results across your entire library</p>
 
-					<div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
-						<div style="display:flex; align-items:center; gap:10px; width:100%;">
-							<span class="toggle-label">CRF</span>
-							<input type="range" id="crfSlider" min="18" max="28" value="22" style="flex:1;" />
-							<span id="crfValue" class="toggle-label">22</span>
-						</div>
-						<p id="crfDesc" class="smart-desc">Recommended - ~97.5% quality retained</p>
-					</div>
-				</div>
+                    <div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
+                        <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                            <span class="toggle-label">CRF</span>
+                            <input type="range" id="crfSlider" min="18" max="28" value="22" style="flex:1;" />
+                            <span id="crfValue" class="toggle-label">22</span>
+                        </div>
+                        <p id="crfDesc" class="smart-desc">Recommended - ~97.5% quality retained</p>
+                    </div>
+                </div>
 
                 <!-- STATUS (console-style text) -->
                 <div class="card group status-group">
@@ -141,33 +141,32 @@
         <!-- SPLITTER -->
         <div id="splitter" class="splitter"></div>
 
-		<!-- RIGHT LOG PANEL (Live Log) -->
-		<div id="logPaneWrapper" class="log-pane-wrapper">
-			<aside id="logPane" class="log-pane">
-				<div class="card group log-group">
-					<div class="group-title-wrapper" style="display:flex; align-items:center; justify-content:space-between; width:100%; min-width:0; overflow:hidden;">
-						<h2 class="group-title" style="margin:0; white-space:nowrap; flex-shrink:0;">Live Log</h2>
-					<div id="logFilterRow" class="log-filter-row">
-						<input id="logFilterInput" type="text" placeholder="Search Filter..." />
-						<span id="logFilterCount" class="log-filter-count"></span>
-						<button id="logFilterClear" class="btn small">✕</button>
-					</div>
-				</div>
+        <!-- RIGHT LOG PANEL (Live Log) -->
+        <div id="logPaneWrapper" class="log-pane-wrapper">
+            <aside id="logPane" class="log-pane">
+                <div class="card group log-group">
+                    <div class="group-title-wrapper" style="display:flex; align-items:center; justify-content:space-between; width:100%; min-width:0; overflow:hidden;">
+                        <h2 class="group-title" style="margin:0; white-space:nowrap; flex-shrink:0;">Live Log</h2>
+                        <div id="logFilterRow" class="log-filter-row">
+                            <input id="logFilterInput" type="text" placeholder="Search Filter..." />
+                            <span id="logFilterCount" class="log-filter-count"></span>
+                            <button id="logFilterClear" class="btn small">✕</button>
+                        </div>
+                    </div>
 
-					<div id="logViewer" class="log-viewer">
-						<div id="logSpacer" class="log-spacer"></div>
-						<div id="logContent" class="log-content"></div>
-					</div>
+                    <div id="logViewer" class="log-viewer">
+                        <div id="logSpacer" class="log-spacer"></div>
+                        <div id="logContent" class="log-content"></div>
+                    </div>
 
-					<button id="resumeScrollBtn" class="resume-scroll hidden">⮟</button>
+                    <button id="resumeScrollBtn" class="resume-scroll hidden">⮟</button>
 
-					<div class="log-footer">
-						<button id="clearLogsBtn" class="btn danger small">Clear Logs</button>
-					</div>
-				</div>
-			</aside>
-		</div>
-
+                    <div class="log-footer">
+                        <button id="clearLogsBtn" class="btn danger small">Clear Logs</button>
+                    </div>
+                </div>
+            </aside>
+        </div>
 
     </div>
 </div>
@@ -186,48 +185,117 @@
 
             <!-- LEFT PANEL -->
             <div class="compression-left">
-				<div class="card group">
-					<h2 class="group-title">Options</h2>
-					<div class="compression-output-section">
-						<label class="comp-label">Compressed Root:</label>
-						<div class="field-row">
-							<input id="compressionOutputPath" type="text" placeholder="Select output folder..." />
-							<button id="compressionBrowse" class="btn small">Browse</button>
-						</div>
-					</div>
-					<div class="toggle-row" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px;">
-						<div style="display:flex; align-items:center; gap:10px; width:100%;">
-							<span class="toggle-label">Workers</span>
-							<input type="range" id="compressWorkerCount" min="1" max="8" value="2" style="flex:1;" />
-							<span id="compressWorkerValue" class="toggle-label">2</span>
-						</div>
-						<p id="compressWorkerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
-					</div>
-					<div class="toggle-row gpu-toggle-group-modal" style="margin-top:8px;">
-						<span class="toggle-label">CPU</span>
-						<label class="toggle-switch">
-							<input type="checkbox" id="compressUseGPU" />
-							<span class="toggle-track"></span>
-						</label>
-						<span class="toggle-label">GPU</span>
-					</div>
-					<p id="compressGpuStatusDesc" class="smart-desc" style="margin:2px 0 0 0;"></p>
-				</div>
+                <div class="card group">
+                    <h2 class="group-title">Options</h2>
+                    <div class="compression-output-section">
+                        <label class="comp-label">Compressed Root:</label>
+                        <div class="field-row">
+                            <input id="compressionOutputPath" type="text" placeholder="Select output folder..." />
+                            <button id="compressionBrowse" class="btn small">Browse</button>
+                        </div>
+                    </div>
+                    <div class="toggle-row" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px;">
+                        <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                            <span class="toggle-label">Workers</span>
+                            <input type="range" id="compressWorkerCount" min="1" max="8" value="2" style="flex:1;" />
+                            <span id="compressWorkerValue" class="toggle-label">2</span>
+                        </div>
+                        <p id="compressWorkerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
+                    </div>
+                    <div class="toggle-row gpu-toggle-group-modal" style="margin-top:8px;">
+                        <span class="toggle-label">CPU</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="compressUseGPU" />
+                            <span class="toggle-track"></span>
+                        </label>
+                        <span class="toggle-label">GPU</span>
+                    </div>
+                    <p id="compressGpuStatusDesc" class="smart-desc" style="margin:2px 0 0 0;"></p>
+                </div>
 
+                <div class="card group" style="margin-top:16px;">
+					<h2 class="group-title">Filter By</h2>
+
+					<div class="filter-cols">
+						<div class="filter-col" id="filterConfCol">
+							<label class="comp-label">Confidence</label>
+							<label class="filter-check"><input type="checkbox" id="filterConfHigh" checked /> High</label>
+							<label class="filter-check"><input type="checkbox" id="filterConfMedium" checked /> Medium</label>
+							<label class="filter-check"><input type="checkbox" id="filterConfLow" checked /> Low</label>
+						</div>
+						<div class="filter-col">
+							<label class="comp-label">Resolution</label>
+							<label class="filter-check"><input type="checkbox" id="filterRes720" checked /> ≤720p</label>
+							<label class="filter-check"><input type="checkbox" id="filterRes1080" checked /> 1080p</label>
+							<label class="filter-check"><input type="checkbox" id="filterRes4k" checked /> ≥4K</label>
+						</div>
+					</div>
+
+					<div class="filter-section filter-row-inline">
+						<label class="comp-label">Minimum saving</label>
+						<div class="num-field">
+							<div class="num-stepper">
+								<input type="number" id="filterMinMB" min="1" max="9999" step="10" placeholder="—" />
+								<div class="num-stepper-arrows">
+									<button type="button" class="num-step num-up" data-target="filterMinMB">▲</button>
+									<button type="button" class="num-step num-down" data-target="filterMinMB">▼</button>
+								</div>
+							</div>
+							<span class="num-unit">MB</span>
+						</div>
+					</div>
+
+					<div class="filter-section filter-row-inline">
+						<label class="comp-label">Minimum space saved</label>
+						<div class="num-field">
+							<div class="num-stepper">
+								<input type="number" id="filterMinPct" min="10" max="95" step="1" placeholder="—" />
+								<div class="num-stepper-arrows">
+									<button type="button" class="num-step num-up" data-target="filterMinPct">▲</button>
+									<button type="button" class="num-step num-down" data-target="filterMinPct">▼</button>
+								</div>
+							</div>
+							<span class="num-unit">%</span>
+						</div>
+					</div>
+
+					<div class="filter-section filter-row-inline">
+						<label class="comp-label"></label>
+						<select id="filterCapMode" class="filter-select">
+							<option value="none">Cap selection</option>
+							<option value="topn">Top savers</option>
+							<option value="reclaim">Free up at least</option>
+							<option value="fit">Keep total under</option>
+						</select>
+						<div class="num-field hidden" id="filterCapField">
+							<div class="num-stepper">
+								<input type="number" id="filterCapValue" min="10" max="99999" step="10" placeholder="—" />
+								<div class="num-stepper-arrows">
+									<button type="button" class="num-step num-up" data-target="filterCapValue">▲</button>
+									<button type="button" class="num-step num-down" data-target="filterCapValue">▼</button>
+								</div>
+							</div>
+							<span class="num-unit" id="filterCapUnit">files</span>
+						</div>
+					</div>
+
+					<button id="filterReset" class="btn small" style="margin-top:12px;">Reset Defaults</button>
+				</div>
+				
 				<div class="card group" style="margin-top:16px;">
 					<h2 class="group-title">Summary</h2>
-					<div class="compression-summary" id="compressionSummary"></div>
-				</div>
+                    <div class="compression-summary" id="compressionSummary"></div>
+                </div>
 
-				<button id="compressionStart" class="btn primary compression-start-btn">Compress</button>
-			</div>
+                <button id="compressionStart" class="btn primary compression-start-btn">Compress</button>
+            </div>
 
             <!-- DIVIDER -->
             <div class="compression-divider"></div>
 
-			<!-- RIGHT PANEL: TREE -->
+            <!-- RIGHT PANEL: TREE -->
             <div class="compression-right">
-				<div class="card group compression-tree-wrapper">
+                <div class="card group compression-tree-wrapper">
                     <table id="compressionTree" class="compression-tree">
                         <colgroup>
                             <col id="colName" />
@@ -253,11 +321,11 @@
 </div>
 <div id="confirmModal" class="modal hidden">
     <div class="modal-content">
-		<p>
-			You are about to clear all logs and reset your library data.<br>
-			This action cannot be undone.<br><br>
-			Do you want to continue?
-		</p>
+        <p>
+            You are about to clear all logs and reset your library data.<br>
+            This action cannot be undone.<br><br>
+            Do you want to continue?
+        </p>
 
         <div class="modal-buttons">
             <button id="confirmYes">OK</button>

@@ -750,6 +750,42 @@ Test-Case "formatSecondsToHms uses 4-digit hour padding" {
     $appContent -match 'padStart\(4,\s*"0"\)'
 }
 
+Test-Case "app.js has applyCompressionFilter function" {
+    $appContent -match 'function applyCompressionFilter'
+}
+
+Test-Case "Compression filter debounces typed number entry (no setInterval)" {
+    $appContent -match '_filterDebounce' -and $appContent -match 'setTimeout\(applyCompressionFilter'
+}
+
+Test-Case "Compression filter has a reset-to-defaults handler" {
+    $appContent -match 'function resetCompressionFilter'
+}
+
+Test-Case "Confidence filter is data-gated on probe variance" {
+    $appContent -match 'hasVariance' -and $appContent -match 'tip-disabled'
+}
+
+Test-Case "Filter number boxes use themed step buttons" {
+    $appContent -match 'function _stepFilterNum' -and $appContent -match 'num-step'
+}
+
+Test-Case "Compression filter reads control state once before iterating rows" {
+    $appContent -match 'function _filterLeafMatches' -and $appContent -match 'cb\.disabled\) continue'
+}
+
+Test-Case "Compression filter supports cap modes (top-n / reclaim / fit)" {
+    ($appContent -match "capMode === `"topn`"") -and ($appContent -match "capMode === `"reclaim`"") -and ($appContent -match "capMode === `"fit`"")
+}
+
+Test-Case "Cap ranks eligible pool by savedmb before trimming" {
+    $appContent -match 'eligible\.sort' -and $appContent -match 'dataset\.savedmb'
+}
+
+Test-Case "Fit-output cap reads estimated compressed size" {
+    $appContent -match 'dataset\.estmb'
+}
+
 # ============================================================
 # SUITE 16: GPU Encoder Resolution (Common module)
 # Verifies UM-ResolveEncoder / UM-ResolveEncoderArgs contracts

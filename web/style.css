@@ -660,15 +660,16 @@ input[type="text"] {
     box-shadow:
         0 0 0 1px #2c3445,
         0 0 30px rgba(0,0,0,0.8);
-    width: 75vw;
-    height: 68vh;
-    max-width: 1400px;
+    width: 1300px;
+    height: 900px;
+    min-width: 60%;
+    max-width: 85%;
+    min-height: 72%;
+    max-height: 90%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     resize: both;
-    min-width: 800px;
-    min-height: 400px;
 }
 
 .compression-tree tbody tr.tree-stripe {
@@ -784,6 +785,146 @@ input[type="text"] {
 }
 
 .compression-summary .summary-saved { color: #4caf82; }
+
+/* ------------------------[ UI: Review Filter ]---------------------- */
+.filter-section { margin-top: 12px; }
+
+.filter-row-inline {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+/* Confidence + Resolution side by side, each stacked vertically */
+.filter-cols {
+    display: flex;
+    gap: 28px;
+    margin-top: 8px;
+}
+
+.filter-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    position: relative;
+}
+
+.filter-col .comp-label { margin-bottom: 2px; }
+
+.filter-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.filter-check input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent-strong);
+    cursor: pointer;
+}
+
+.filter-check input:disabled { cursor: default; opacity: 0.4; }
+
+/* When greyed out, swallow clicks and show a tooltip on hover instead of a permanent note */
+.filter-col.tip-disabled .filter-check { pointer-events: none; }
+
+.filter-col.tip-disabled:hover::after {
+    content: "Requires accurate probe";
+    position: absolute;
+    left: 0;
+    top: calc(100% + 4px);
+    padding: 5px 8px;
+    background: #161a26;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 60;
+    pointer-events: none;
+}
+
+/* Compact number box with always-visible, themed step arrows */
+.num-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.num-unit {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.num-stepper {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: #0e111b;
+    overflow: hidden;
+}
+
+.num-stepper input[type="number"] {
+    width: 42px;
+    padding: 4px 5px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    text-align: center;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.num-stepper input::-webkit-outer-spin-button,
+.num-stepper input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+#filterMinPct { width: 28px; }
+
+.num-stepper-arrows {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border-subtle);
+}
+
+.num-step {
+    flex: 1;
+    width: 18px;
+    padding: 0;
+    border: none;
+    background: #161a26;
+    color: var(--text-muted);
+    font-size: 7px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-select {
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: #0e111b;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.filter-select:focus { outline: 1px solid var(--accent-strong); }
+
+.num-step:hover { background: var(--accent-strong); color: var(--text); }
+.num-up { border-bottom: 1px solid var(--border-subtle); }
 
 #compressionStart.btn {
     width: 50%;

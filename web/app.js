@@ -1337,6 +1337,8 @@ function buildTreeData(entries) {
             skipReason: e.SkipReason || null,
             confidence: e.Confidence || null,
             savedPct:   e.SavedPct || 0,
+            savedMB:    e.SavedMB || 0,
+            width:      e.Width || 0,
             path:       e.Path
         };
     }
@@ -1482,7 +1484,14 @@ function renderTree(node, level, tbody, parentCheckbox) {
 			tdVerdict.style.opacity = "0.45";
 	}
 		
-    if (node.path) tr.dataset.path = node.path;
+    if (node.path) {
+        tr.dataset.path       = node.path;
+        tr.dataset.width      = node.width      || 0;
+        tr.dataset.savedmb    = node.savedMB    || 0;
+        tr.dataset.savedpct   = node.savedPct   || 0;
+        tr.dataset.estmb      = node.estMB      || 0;
+        tr.dataset.confidence = node.confidence || "";
+    }
     tbody.appendChild(tr);
 
     // Children
@@ -1677,8 +1686,8 @@ function updateCompressionSummary() {
     const savedMB  = origMB - estMB;
     const savedPct = origMB > 0 ? ((savedMB / origMB) * 100).toFixed(1) : 0;
 
-    document.getElementById("sumShows").textContent    = folders.size;
-    document.getElementById("sumEpisodes").textContent = leafRowsForSize.length;
+    document.getElementById("sumShows").textContent    = folders.size.toLocaleString();
+    document.getElementById("sumEpisodes").textContent = leafRowsForSize.length.toLocaleString();
     document.getElementById("sumBefore").textContent   = formatMB(origMB);
     document.getElementById("sumAfter").textContent    = formatMB(estMB);
     document.getElementById("sumSaved").textContent    = `${formatMB(savedMB)} (${savedPct}%)`;
@@ -1710,6 +1719,185 @@ function syncParentCheckboxes(tbody) {
         cb.checked = checkedCount === descLeaves.length;
         cb.indeterminate = checkedCount > 0 && checkedCount < descLeaves.length;
     }
+}
+
+/* ------------------------[ Smart Compression Review: Filter ]---------------------- */
+
+let _filterDebounce = null;
+function _debounceFilter() {
+    clearTimeout(_filterDebounce);
+    _filterDebounce = setTimeout(applyCompressionFilter, 250);
+}
+
+function _readFilterNum(id, min, max) {
+    const raw = document.getElementById(id).value.trim();
+    if (raw === "") return null;             // blank = no limit
+    const n = parseInt(raw, 10);
+    if (isNaN(n)) return null;
+    return Math.max(min, Math.min(max, n));  // clamp to range
+}
+
+function _clampFilterBox(el) {
+    const raw = el.value.trim();
+    if (raw === "") return;
+    const n = parseInt(raw, 10);
+    if (isNaN(n)) { el.value = ""; return; }
+    el.value = Math.max(parseInt(el.min, 10), Math.min(parseInt(el.max, 10), n));
+}
+
+function _stepFilterNum(id, dir) {
+    const el = document.getElementById(id);
+    const step = parseInt(el.step, 10) || 1;
+    const min = parseInt(el.min, 10);
+    const max = parseInt(el.max, 10);
+    let cur = parseInt(el.value, 10);
+    if (isNaN(cur)) cur = 0;                       // blank: a step up lands on the step value
+    el.value = Math.max(min, Math.min(max, cur + dir * step));
+    applyCompressionFilter();
+}
+
+function _onCapModeChange() {
+    const mode  = document.getElementById("filterCapMode").value;
+    const field = document.getElementById("filterCapField");
+    const unit  = document.getElementById("filterCapUnit");
+    const box   = document.getElementById("filterCapValue");
+    field.classList.toggle("hidden", mode === "none");
+    if (mode === "topn")    { unit.textContent = "files"; box.min = 10; box.step = 10; }
+    if (mode === "reclaim") { unit.textContent = "GB";    box.min = 10; box.step = 10; }
+    if (mode === "fit")     { unit.textContent = "GB";    box.min = 10; box.step = 10; }
+    applyCompressionFilter();
+}
+
+function _filterLeafMatches(row, st) {
+    if (st.minMB  !== null && (parseFloat(row.dataset.savedmb)  || 0) < st.minMB)  return false;
+    if (st.minPct !== null && (parseFloat(row.dataset.savedpct) || 0) < st.minPct) return false;
+
+    if (!st.confDisabled) {
+        const c = row.dataset.confidence;
+        if (c === "High"   && !st.cHigh) return false;
+        if (c === "Medium" && !st.cMed)  return false;
+        if (c === "Low"    && !st.cLow)  return false;
+    }
+
+    if (st.r720 || st.r1080 || st.r4k) {
+        const w = parseInt(row.dataset.width, 10) || 0;
+        const match = (st.r720  && w <= 1280) ||
+                      (st.r1080 && w >= 1281 && w <= 2560) ||
+                      (st.r4k   && w >= 2561);
+        if (!match) return false;
+    }
+    return true;
+}
+
+function applyCompressionFilter() {
+    const tbody = document.getElementById("compressionTreeBody");
+    if (!tbody) return;
+
+    // Read control state once (avoids thousands of lookups on large libraries)
+    const st = {
+        confDisabled: document.getElementById("filterConfHigh").disabled,
+        cHigh:  document.getElementById("filterConfHigh").checked,
+        cMed:   document.getElementById("filterConfMedium").checked,
+        cLow:   document.getElementById("filterConfLow").checked,
+        r720:   document.getElementById("filterRes720").checked,
+        r1080:  document.getElementById("filterRes1080").checked,
+        r4k:    document.getElementById("filterRes4k").checked,
+        minMB:  _readFilterNum("filterMinMB", 1, 9999),
+        minPct: _readFilterNum("filterMinPct", 10, 95)
+    };
+
+    // Pass 1 - predicate filters decide the eligible pool
+    const eligible = [];
+    for (const row of tbody.querySelectorAll("tr[data-path]")) {
+        const cb = row.querySelector(".tree-checkbox");
+        if (!cb || cb.disabled) continue;          // Skip-verdict rows stay unchecked
+        if (_filterLeafMatches(row, st)) {
+            cb.checked = true;
+            eligible.push(row);
+        } else {
+            cb.checked = false;
+        }
+    }
+
+    // Pass 2 - cap trims the eligible pool, biggest savers first
+    const capMode = document.getElementById("filterCapMode").value;
+    if (capMode !== "none") {
+        const capVal = _readFilterNum("filterCapValue", 10, 99999);
+        if (capVal !== null) {
+            eligible.sort((a, b) => (parseFloat(b.dataset.savedmb) || 0) - (parseFloat(a.dataset.savedmb) || 0));
+            if (capMode === "topn") {
+                eligible.slice(capVal).forEach(row => row.querySelector(".tree-checkbox").checked = false);
+            } else if (capMode === "reclaim") {
+                const targetMB = capVal * 1024;            // GB -> MB
+                let acc = 0, met = false;
+                for (const row of eligible) {
+                    if (met) { row.querySelector(".tree-checkbox").checked = false; continue; }
+                    acc += parseFloat(row.dataset.savedmb) || 0;
+                    if (acc >= targetMB) met = true;       // include the file that crosses the line
+                }
+            } else if (capMode === "fit") {
+                const budgetMB = capVal * 1024;            // GB -> MB
+                let acc = 0;
+                for (const row of eligible) {
+                    const out = parseFloat(row.dataset.estmb) || 0;
+                    if (acc + out > budgetMB) { row.querySelector(".tree-checkbox").checked = false; continue; }
+                    acc += out;                            // stop before crossing the line
+                }
+            }
+        }
+    }
+
+    syncParentCheckboxes(tbody);
+    updateCompressionSummary();
+    saveCompressionSelections();
+}
+
+function resetCompressionFilter() {
+    ["filterConfHigh", "filterConfMedium", "filterConfLow"].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el.disabled) el.checked = true;
+    });
+    document.getElementById("filterMinMB").value = "";
+    document.getElementById("filterMinPct").value = "";
+    ["filterRes720", "filterRes1080", "filterRes4k"].forEach(id => document.getElementById(id).checked = true);
+    document.getElementById("filterCapMode").value = "none";
+    document.getElementById("filterCapValue").value = "";
+    _onCapModeChange();
+}
+
+function initCompressionFilter() {
+    const tbody = document.getElementById("compressionTreeBody");
+    if (!tbody) return;
+
+    // Confidence only varies under an accurate probe (fast probes return "High" for
+    // everything). Enable the boxes only if Medium/Low values exist; else grey out + note.
+    const confs = [...tbody.querySelectorAll("tr[data-path]")].map(r => r.dataset.confidence);
+    const hasVariance = confs.some(c => c === "Medium" || c === "Low");
+    ["filterConfHigh", "filterConfMedium", "filterConfLow"].forEach(id => {
+        const el = document.getElementById(id);
+        el.disabled = !hasVariance;
+        el.checked = true;
+    });
+    document.getElementById("filterConfCol").classList.toggle("tip-disabled", !hasVariance);
+
+    if (window._filterWired) return;             // attach listeners once
+    window._filterWired = true;
+
+    ["filterConfHigh", "filterConfMedium", "filterConfLow"].forEach(id =>
+        document.getElementById(id).addEventListener("change", applyCompressionFilter));
+    ["filterRes720", "filterRes1080", "filterRes4k"].forEach(id =>
+        document.getElementById(id).addEventListener("change", applyCompressionFilter));
+    ["filterMinMB", "filterMinPct"].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener("input", _debounceFilter);              // debounced typed entry
+        el.addEventListener("blur", () => _clampFilterBox(el));
+    });
+	document.querySelectorAll(".num-step").forEach(btn =>
+        btn.addEventListener("click", () => _stepFilterNum(btn.dataset.target, btn.classList.contains("num-up") ? 1 : -1)));
+	document.getElementById("filterCapMode").addEventListener("change", _onCapModeChange);
+    document.getElementById("filterCapValue").addEventListener("input", _debounceFilter);
+    document.getElementById("filterCapValue").addEventListener("blur", () => _clampFilterBox(document.getElementById("filterCapValue")));
+    document.getElementById("filterReset").addEventListener("click", resetCompressionFilter);
 }
 
 function initColumnResize() {
@@ -1801,11 +1989,11 @@ async function showCompressionModal() {
     summary.innerHTML = `
         <div class="summary-grid">
             <span class="summary-label">Number of Folders:</span>
-            <span class="summary-value" id="sumShows">${folderCount}</span>
+            <span class="summary-value" id="sumShows">${folderCount.toLocaleString()}</span>
             <span class="summary-label">Number of Files:</span>
-            <span class="summary-value" id="sumEpisodes">${fileCount}</span>
+            <span class="summary-value" id="sumEpisodes">${fileCount.toLocaleString()}</span>
             <span class="summary-label">To Compress:</span>
-            <span class="summary-value">${compressCount} / ${fileCount}</span>
+            <span class="summary-value">${compressCount.toLocaleString()} / ${fileCount.toLocaleString()}</span>
             <span class="summary-label">Size Before:</span>
             <span class="summary-value" id="sumBefore">${formatMB(root.origMB)}</span>
             <span class="summary-label">Size After:</span>
@@ -1838,6 +2026,7 @@ async function showCompressionModal() {
 	
     modal.classList.remove("hidden");
     initColumnResize();
+    initCompressionFilter();
 }
 
 document.getElementById("compressionClose").addEventListener("click", () => {

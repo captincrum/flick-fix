@@ -16,11 +16,20 @@ jobs:
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+        - name: Install ffmpeg
+        run: choco install ffmpeg -y --no-progress
+        
       - name: Run PowerShell unit tests
         shell: pwsh
         run: |
           & ".\Tests\Run-Tests.ps1"
           exit $LASTEXITCODE
+          
+        - name: Compression smoke test (real encode)
+        shell: pwsh
+        run: |
+          & ".\Tests\Run-CompressionSmoke.ps1"
+          exit $LASTEXITCODE          
 
       - name: Install Node dependencies
         run: npm install

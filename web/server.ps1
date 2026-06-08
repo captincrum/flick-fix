@@ -2,7 +2,15 @@
 # Launches the FlickFix UI in an Edge app window when this script is run
 # directly, so the operator gets a window instead of a bare console.
 
-#Add-Type -Name Win32 -Namespace Console -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);' ; [Console.Win32]::ShowWindow((Get-Process -Id $PID).MainWindowHandle, 0)
+# Hide the PowerShell console when launched directly (right-click -> Run with
+# PowerShell). Skipped when dot-sourced. 0 = SW_HIDE.
+if ($MyInvocation.InvocationName -ne '.') {
+    Add-Type -Name Win32Hide -Namespace UM -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]   public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+'@
+    [UM.Win32Hide]::ShowWindow([UM.Win32Hide]::GetConsoleWindow(), 0) | Out-Null
+}
 
 # Only open a window when run directly; skip when this file is dot-sourced.
 if ($MyInvocation.InvocationName -ne '.') {
@@ -310,6 +318,15 @@ while ($true) {
         "/app.js"      { Send-File $response "$root\app.js" "application/javascript" }
         "/favicon.ico" { Send-File $response "$root\favicon.ico" "image/x-icon" }
 
+		# Shut the server down when the app window closes.
+        "/shutdown" {
+            $response.StatusCode = 200
+            $response.Close()
+            Stop-Pipeline
+            $listener.Stop()
+            exit
+        }
+		
         # -------------------------[ API: Buttons ]---------------------------------- #
         # Endpoints driven by the main UI buttons.
 

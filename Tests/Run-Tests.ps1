@@ -539,6 +539,19 @@ Write-Host "------------------------------------"
 $serverPath = Join-Path $repoRoot "web\server.ps1"
 $serverContent = Get-Content $serverPath -Raw
 
+Test-Case "Server hides its console window on direct launch" {
+    $serverContent -match 'GetConsoleWindow' -and $serverContent -match 'ShowWindow'
+}
+
+Test-Case "Server has /shutdown endpoint" {
+    $serverContent -match '"/shutdown"'
+}
+
+Test-Case "/shutdown stops the pipeline and exits" {
+    $shutdownBlock = [regex]::Match($serverContent, '"/shutdown"[\s\S]*?(?="\/)').Value
+    ($shutdownBlock -match 'Stop-Pipeline') -and ($shutdownBlock -match 'exit')
+}
+
 Test-Case "Server has /logs/total endpoint" {
     $serverContent -match '"/logs/total"'
 }
@@ -658,6 +671,10 @@ Write-Host "--------------------------------"
 
 $appPath = Join-Path $repoRoot "web\app.js"
 $appContent = Get-Content $appPath -Raw
+
+Test-Case "app.js sends a /shutdown beacon when the window closes" {
+    $appContent -match 'pagehide' -and $appContent -match 'sendBeacon\(.*shutdown'
+}
 
 Test-Case "app.js Start handler shows an error popup on failure" {
     $startHandler = [regex]::Match($appContent, "getElementById\(`"startBtn`"\)\.addEventListener[\s\S]*?console\.log\(`"Start:`"").Value

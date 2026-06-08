@@ -2443,3 +2443,8 @@ async function unifiedPoll() {
 
 setInterval(unifiedPoll, 500);
 unifiedPoll();
+
+// Close the PowerShell server when the app window closes.
+window.addEventListener("pagehide", () => {
+    navigator.sendBeacon("/shutdown");
+});

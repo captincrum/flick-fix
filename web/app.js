@@ -991,11 +991,22 @@ function updateSummaries() {
 
 function initCollapsibles() {
     document.querySelectorAll(".collapse-header").forEach(function (h) {
-        function toggle() {
-            const card = h.closest(".card.group");
-            if (card) card.classList.toggle("collapsed");
-        }
-        h.addEventListener("click", toggle);
+        const card = h.closest(".card.group");
+        if (!card) return;
+
+        function toggle() { card.classList.toggle("collapsed"); }
+
+        // Collapsed: a click anywhere on the card opens it.
+        // Open: only a click within the header collapses it, so interacting
+        // with the body (sliders, inputs, buttons) never closes the menu.
+        card.addEventListener("click", function (e) {
+            if (card.classList.contains("collapsed")) {
+                card.classList.remove("collapsed");
+            } else if (h.contains(e.target)) {
+                card.classList.add("collapsed");
+            }
+        });
+
         h.addEventListener("keydown", function (e) {
             if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
         });
@@ -1005,10 +1016,12 @@ function initCollapsibles() {
 
 /* ------------------------[ Theme switcher ]------------------------ */
 const THEMES = [
+    { id: "warm-white", name: "Warm white", accent: "#e0d8cc" },
+    { id: "slate-grey", name: "Slate grey", accent: "#c8ccd8" },
     { id: "sage",       name: "Sage",       accent: "#4aaa88" },
     { id: "",           name: "Dark",       accent: "#5b8def" },
     { id: "warm-slate", name: "Warm slate", accent: "#e8933e" },
-    { id: "true-black", name: "True black", accent: "#1a2220" }
+    { id: "true-black", name: "True black", accent: "#1c1c1c" }
 ];
 const THEME_KEY = "flickfix-theme";
 

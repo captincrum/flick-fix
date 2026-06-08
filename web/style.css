@@ -230,6 +230,112 @@
     --scrollbar-thumb-hover:#5c6460;
 }
 
+[data-theme="slate-grey"] {
+    --bg:                   #dde0e8;
+    --bg-elevated:          #e8eaf0;
+    --bg-card:              #f0f2f7;
+    --bg-console:           #d0d4de;
+    --bg-btn:               #e8eaf0;
+    --bg-btn-hover:         #4a72d4;
+    --bg-btn-active:        #e8eaf0;
+    --bg-stepper-arrow:     #dde0e8;
+    --bg-scroll-btn:        #c8d0e0;
+    --bg-scroll-btn-hover:  #b8c4d8;
+    --bg-tooltip:           #c8ccd8;
+    --bg-modal-btn:         #e8eaf0;
+    --bg-modal-btn-hover:   #c8ccd8;
+
+    --border-subtle:        #c8ccd8;
+    --border-card:          #d4d8e4;
+    --border-panel:         #ccd0dc;
+    --border-scroll-btn:    #b8c0d0;
+    --border-modal-btn:     #a0a8b8;
+
+    --text:                 #1e2230;
+    --text-muted:           #5a6278;
+    --text-on-accent:       #ffffff;
+    --text-modal-btn:       #1e2230;
+
+    --accent:               #6880b8;
+    --accent-strong:        #4a72d4;
+    --accent-strong-hover:  #3058b8;
+    --accent-toggle-off:    #5068a8;
+    --accent-success:       #3a9468;
+    --accent-warn:          #d09020;
+    --accent-idle:          #6888c8;
+    --accent-tint:          rgba(74, 114, 212, 0.12);
+    --danger:               #c03030;
+
+    --scrim:                rgba(0,0,0,0.4);
+    --overlay-light-subtle: rgba(0,0,0,0.02);
+    --overlay-light-soft:   rgba(0,0,0,0.04);
+    --overlay-light:        rgba(0,0,0,0.06);
+    --overlay-light-strong: rgba(0,0,0,0.09);
+    --resizer-line:         rgba(0,0,0,0.2);
+
+    --toggle-knob:          #ffffff;
+
+    --shadow-modal:         0 0 20px rgba(0,0,0,0.15);
+    --shadow-modal-lg:      0 12px 40px rgba(0,0,0,0.2);
+
+    --scrollbar-track:      #d0d4de;
+    --scrollbar-thumb:      #b0b6c8;
+    --scrollbar-thumb-hover:#9aa0b8;
+}
+
+[data-theme="warm-white"] {
+    --bg:                   #f4f0ea;
+    --bg-elevated:          #fdfaf6;
+    --bg-card:              #ffffff;
+    --bg-console:           #ece8e0;
+    --bg-btn:               #fdfaf6;
+    --bg-btn-hover:         #d07840;
+    --bg-btn-active:        #fdfaf6;
+    --bg-stepper-arrow:     #f4f0ea;
+    --bg-scroll-btn:        #e8e0d4;
+    --bg-scroll-btn-hover:  #d8d0c4;
+    --bg-tooltip:           #e8e4dc;
+    --bg-modal-btn:         #f0ece4;
+    --bg-modal-btn-hover:   #d8d4cc;
+
+    --border-subtle:        #e0d8cc;
+    --border-card:          #e8e2d8;
+    --border-panel:         #dcd4c8;
+    --border-scroll-btn:    #ccc4b8;
+    --border-modal-btn:     #b8b0a4;
+
+    --text:                 #28201a;
+    --text-muted:           #78706a;
+    --text-on-accent:       #ffffff;
+    --text-modal-btn:       #28201a;
+
+    --accent:               #b07850;
+    --accent-strong:        #d07840;
+    --accent-strong-hover:  #b06030;
+    --accent-toggle-off:    #b86838;
+    --accent-success:       #3a9468;
+    --accent-warn:          #c88820;
+    --accent-idle:          #c88858;
+    --accent-tint:          rgba(208, 120, 64, 0.12);
+    --danger:               #c03030;
+
+    --scrim:                rgba(0,0,0,0.35);
+    --overlay-light-subtle: rgba(0,0,0,0.02);
+    --overlay-light-soft:   rgba(0,0,0,0.04);
+    --overlay-light:        rgba(0,0,0,0.06);
+    --overlay-light-strong: rgba(0,0,0,0.09);
+    --resizer-line:         rgba(0,0,0,0.2);
+
+    --toggle-knob:          #ffffff;
+
+    --shadow-modal:         0 0 20px rgba(0,0,0,0.12);
+    --shadow-modal-lg:      0 12px 40px rgba(0,0,0,0.16);
+
+    --scrollbar-track:      #ece8e0;
+    --scrollbar-thumb:      #ccc8c0;
+    --scrollbar-thumb-hover:#b8b4ac;
+}
+
 /* ------------------------------------------------------------
    LIGHT THEME TEMPLATE
    Uncomment, set values, then add  data-theme="light"  to <html>.

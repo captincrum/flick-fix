@@ -170,6 +170,11 @@ $Global:UM_LogCache         = [System.Collections.Generic.List[string]]::new()
 $Global:UM_LogCacheSize     = 0
 $Global:UM_LogCacheLastRead = [datetime]::MinValue
 
+# App-alive watchdog: the UI polls every 500ms. If it goes quiet for this many
+# seconds the window is gone, so the server shuts itself down.
+$Global:UM_LastPing            = [datetime]::UtcNow
+$Global:UM_IdleShutdownSeconds = 10
+
 # Validation messages — defined once, reused at every call site.
 $Global:UM_MsgPathNotFound = "Directory not found. Check the path and try again.`nInvalid directory path: "
 $Global:UM_MsgNoSpace      = "Not enough available space at the given location."
@@ -299,7 +304,21 @@ while ($true) {
     # -------------------------[ HTTP Request Handling ]------------------------- #
     # Reads the incoming request and routes it by URL path.
 
-    $context  = $listener.GetContext()
+    # Wait for the next request, but wake up every second so we can notice the
+    # app window closing (the UI stops polling) and shut ourselves down.
+    $task = $listener.GetContextAsync()
+    while (-not $task.Wait(1000)) {
+        if (([datetime]::UtcNow - $Global:UM_LastPing).TotalSeconds -gt $Global:UM_IdleShutdownSeconds) {
+            Stop-Pipeline
+            $listener.Stop()
+            exit
+        }
+    }
+    $context  = $task.Result
+
+    # Any incoming request means the app is still open.
+    $Global:UM_LastPing = [datetime]::UtcNow
+
     $request  = $context.Request
     $response = $context.Response
     $path     = $request.Url.AbsolutePath.ToLower()
@@ -317,15 +336,6 @@ while ($true) {
         "/style.css"   { Send-File $response "$root\style.css" "text/css" }
         "/app.js"      { Send-File $response "$root\app.js" "application/javascript" }
         "/favicon.ico" { Send-File $response "$root\favicon.ico" "image/x-icon" }
-
-		# Shut the server down when the app window closes.
-        "/shutdown" {
-            $response.StatusCode = 200
-            $response.Close()
-            Stop-Pipeline
-            $listener.Stop()
-            exit
-        }
 		
         # -------------------------[ API: Buttons ]---------------------------------- #
         # Endpoints driven by the main UI buttons.

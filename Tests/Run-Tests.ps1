@@ -543,13 +543,16 @@ Test-Case "Server hides its console window on direct launch" {
     $serverContent -match 'GetConsoleWindow' -and $serverContent -match 'ShowWindow'
 }
 
-Test-Case "Server has /shutdown endpoint" {
-    $serverContent -match '"/shutdown"'
+Test-Case "Server defines an idle-shutdown watchdog" {
+    ($serverContent -match 'UM_LastPing') -and ($serverContent -match 'UM_IdleShutdownSeconds')
 }
 
-Test-Case "/shutdown stops the pipeline and exits" {
-    $shutdownBlock = [regex]::Match($serverContent, '"/shutdown"[\s\S]*?(?="\/)').Value
-    ($shutdownBlock -match 'Stop-Pipeline') -and ($shutdownBlock -match 'exit')
+Test-Case "Main loop waits with a timeout so it can notice the app closing" {
+    ($serverContent -match 'GetContextAsync') -and ($serverContent -match '\.Wait\(1000\)')
+}
+
+Test-Case "Idle watchdog stops the pipeline and exits when the UI goes quiet" {
+    $serverContent -match 'UM_IdleShutdownSeconds[\s\S]*?Stop-Pipeline[\s\S]*?exit'
 }
 
 Test-Case "Server has /logs/total endpoint" {
@@ -671,10 +674,6 @@ Write-Host "--------------------------------"
 
 $appPath = Join-Path $repoRoot "web\app.js"
 $appContent = Get-Content $appPath -Raw
-
-Test-Case "app.js sends a /shutdown beacon when the window closes" {
-    $appContent -match 'pagehide' -and $appContent -match 'sendBeacon\(.*shutdown'
-}
 
 Test-Case "app.js Start handler shows an error popup on failure" {
     $startHandler = [regex]::Match($appContent, "getElementById\(`"startBtn`"\)\.addEventListener[\s\S]*?console\.log\(`"Start:`"").Value

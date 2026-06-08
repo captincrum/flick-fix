@@ -9,7 +9,7 @@
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?style=flat-square&logo=powershell&logoColor=white)](#installation-and-requirements)
 [![Stars](https://img.shields.io/github/stars/captincrum/flick-fix?style=flat-square)](https://github.com/captincrum/flick-fix/stargazers)
 
-![FlickFix main interface](assets/scan-mode.jpg)
+<!-- ![FlickFix main interface](assets/scan-mode.jpg) -->
 
 </div>
 
@@ -32,7 +32,7 @@ Built for Plex and Jellyfin libraries, homelabs, and anyone who hoards more medi
 - Parallel worker scanning with configurable worker count
 - Restart-safe logic — resumes where it left off on large libraries
 
-![FlickFix scanning a library](assets/search-demo.gif)
+<!--![FlickFix scanning a library](assets/search-demo.gif) -->
 
 ### 🛠️ Automated Repair Tools
 - Attempts repair using multiple strategies in sequence
@@ -56,9 +56,9 @@ Built for Plex and Jellyfin libraries, homelabs, and anyone who hoards more medi
 - Parallel compression with separate worker-count control
 - Restart-safe — skips already-completed files on resume
 
-![Interactive compression results tree](assets/compress-menu.jpg)
+<!--![Interactive compression results tree](assets/compress-menu.jpg) -->
 
-![Compression review and selection](assets/review-menu.gif)
+<!--![Compression review and selection](assets/review-menu.gif) -->
 
 ### 🖥️ Web-Based GUI
 - Runs locally via a built-in PowerShell web server
@@ -102,7 +102,7 @@ Run any stage independently or as a full pipeline:
 2. **Review** — interactive tree shows estimated savings per file; uncheck anything you want to skip
 3. **Compress** — parallel workers compress your selected files, writing live progress to the console
 
-![FlickFix compressing a library](assets/compress-demo.gif)
+<!--![FlickFix compressing a library](assets/compress-demo.gif) -->
 
 ---
 

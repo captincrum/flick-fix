@@ -1,8 +1,4 @@
 /* ------------------------[           DOM references           ]------------------------ */
-const link = document.createElement("link");
-link.href = "https://fonts.googleapis.com/icon?family=Material+Icons";
-link.rel = "stylesheet";
-document.head.appendChild(link);
 
 const logPane         	= document.getElementById("logPane");
 const splitter        	= document.getElementById("splitter");
@@ -926,32 +922,70 @@ function toggleLogPane() {
 function updateSummaries() {
     const sSet = document.getElementById("sumSettings");
     if (sSet) {
-        const root = document.getElementById("rootPath").value.trim();
-        sSet.textContent = root || "No folder selected";
+        const root     = document.getElementById("rootPath").value.trim();
+        const repaired = document.getElementById("repairedPath").value.trim();
+        const mode     = document.querySelector("input[name='mode']:checked")?.value;
+
+        const pathLine = (val) => val
+            ? '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">folder</span>' + val
+            : '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">folder_off</span>No path set';
+
+        let lines;
+        if (mode === "RepairOnly") {
+            lines = [pathLine(repaired)];                  // Repair: repaired root only
+        } else if (mode === "Full") {
+            lines = [pathLine(root), pathLine(repaired)];  // Scan & repair: both paths
+        } else {
+            lines = [pathLine(root)];                      // Scan / Smart compression: library root only
+        }
+
+        sSet.innerHTML = lines.join("<br>");
     }
 
-    const sMode = document.getElementById("sumMode");
-    if (sMode) {
-        const checked = document.querySelector("input[name='mode']:checked");
-        sMode.textContent = checked ? checked.closest("label").textContent.trim() : "";
-    }
+	const sMode = document.getElementById("sumMode");
+	if (sMode) {
+		const checked = document.querySelector("input[name='mode']:checked");
+		const mode = checked ? checked.value : "";
+
+		sMode.innerHTML =
+			mode === "Full"
+				? '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">auto_fix_high</span>Scan & Repair selected'
+			: mode === "ScanOnly"
+				? '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">find_in_page</span>Scan selected'
+			: mode === "RepairOnly"
+				? '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">build</span>Repair selected'
+			: mode === "SmartCompression"
+				? '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">auto_awesome</span>Smart Compression selected'
+			: "";
+	}
+
+
 
     const sSmart = document.getElementById("sumSmart");
     if (sSmart) {
         const isSmart = document.querySelector("input[name='mode']:checked")?.value === "SmartCompression";
         if (!isSmart) {
-			sSmart.innerHTML = '<i class="material-icons" style="font-size:13px;color:#A9A9B3;vertical-align:middle;">lock_outline</i>  locked · pick smart compression';
+			sSmart.innerHTML =
+				'<span class="material-symbols-outlined" style="font-size:13px;color:#A9A9B3;vertical-align:middle;">lock</span> locked · pick smart compression';
         } else {
             const crf = document.getElementById("crfSlider").value;
             const acc = document.getElementById("accurateMode").checked ? "Accurate" : "Fast";
-            sSmart.textContent = "CRF " + crf + " \u00b7 " + acc;
+            sSmart.innerHTML = `
+				<span class="material-symbols-outlined" 
+					  style="font-size:13px;color:#A9A9B3;vertical-align:middle;">
+					thermostat_carbon
+				</span>
+				CRF ${crf} · ${acc}
+			`;
         }
     }
 
     const sOpt = document.getElementById("sumOptions");
     if (sOpt) {
         const r = document.getElementById("compressionOutputPath").value.trim();
-        sOpt.textContent = r || "No folder selected";
+        sOpt.innerHTML = r
+			? '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">folder</span>' + r
+			: '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">folder_off</span>No path set';
     }
 }
 
@@ -971,8 +1005,8 @@ function initCollapsibles() {
 
 /* ------------------------[ Theme switcher ]------------------------ */
 const THEMES = [
-    { id: "",           name: "Dark",       accent: "#5b8def" },
     { id: "sage",       name: "Sage",       accent: "#4aaa88" },
+    { id: "",           name: "Dark",       accent: "#5b8def" },
     { id: "warm-slate", name: "Warm slate", accent: "#e8933e" },
     { id: "true-black", name: "True black", accent: "#1a2220" }
 ];
@@ -1900,7 +1934,9 @@ function _filterLeafMatches(row, st) {
 
 function updateFilterSummary() {
     const el = document.getElementById("sumFilter");
-    if (el) el.textContent = _anyFilterActive() ? "Custom" : "Default";
+    el.innerHTML = _anyFilterActive()
+		? '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">settings_suggest</span>Custom'
+		: '<span class="material-symbols-outlined" style="font-size:16px;color:#888;vertical-align:middle;margin-right:4px;">settings</span>Default';
 }
 
 function applyCompressionFilter() {
@@ -2206,6 +2242,10 @@ document.getElementById("compressionBrowse").addEventListener("click", async () 
         updateSummaries();
     }
 });
+
+// Keep the Options summary in sync when the Compressed Root is typed or cleared
+// (Browse already calls updateSummaries() in its own handler above).
+document.getElementById("compressionOutputPath").addEventListener("input", updateSummaries);
 
 document.getElementById("compressionStart").addEventListener("click", async () => {
     const outputPath = document.getElementById("compressionOutputPath").value.trim();

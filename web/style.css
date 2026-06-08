@@ -600,10 +600,12 @@ input[type="text"] {
     border-color: var(--accent-strong);
 }
 
+#humanLogBtn.active,
+#machineLogBtn.active,
 .btn.toggle.active {
-    background: transparent;
-    border: 1px solid var(--accent-strong);
-    color: var(--text);
+    background: var(--accent-tint);
+    border-color: var(--accent-strong);
+    transform: translateY(-1px);
 }
 
 .btn.toggle.active:hover {
@@ -618,7 +620,8 @@ input[type="text"] {
 
 #humanLogBtn,
 #machineLogBtn {
-    width: 115px;
+    width: 85px;
+    height: 25px;
 }
 
 #browseRoot,
@@ -1537,7 +1540,7 @@ input[type="text"] {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    flex: 0 0 400px;
+    flex: 0 0 350px;
     gap: 5px;
     overflow-y: auto;
     background: var(--bg-elevated);

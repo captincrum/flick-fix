@@ -4,7 +4,7 @@
     "Mode":  "SmartCompression",
     "ScanAllEpisodes":  false,
     "AccurateMode":  false,
-    "CompressionOutputPath":  "F:\\",
+    "CompressionOutputPath":  "",
     "CrfValue":  22,
     "Workers":  4,
     "UseGPU":  false,

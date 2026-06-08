@@ -269,6 +269,64 @@ test.describe('Settings Panel', () => {
 });
 
 // ================================================================
+// SUITE 2b: Settings summary (mode-aware)
+// ================================================================
+test.describe('Settings summary (mode-aware)', () => {
+
+    test.beforeEach(async ({ page }) => { await resetConfig(page); });
+
+    // Fill a path input and fire the 'change' event the app listens for,
+    // so updateSummaries() runs (matches how rootPath/repairedPath are wired).
+    const setPath = async (page, id, value) => {
+        await page.locator(`#${id}`).fill(value);
+        await page.locator(`#${id}`).evaluate(el =>
+            el.dispatchEvent(new Event('change', { bubbles: true })));
+    };
+
+    test('Repair mode shows the repaired path even when library root is blank', async ({ page }) => {
+        await selectMode(page, 'RepairOnly');
+        await setPath(page, 'repairedPath', 'D:\\Repaired');
+        await expect(page.locator('#sumSettings')).toContainText('D:\\Repaired');
+        await expect(page.locator('#sumSettings')).not.toContainText('No path set');
+    });
+
+    test('Repair mode with no repaired path shows No path set', async ({ page }) => {
+        await selectMode(page, 'RepairOnly');
+        await setPath(page, 'repairedPath', '');
+        await expect(page.locator('#sumSettings')).toContainText('No path set');
+    });
+
+    test('Scan mode shows the library root only', async ({ page }) => {
+        await selectMode(page, 'ScanOnly');
+        await setPath(page, 'rootPath', 'C:\\Library');
+        await expect(page.locator('#sumSettings')).toContainText('C:\\Library');
+    });
+
+    test('Smart compression shows the library root only', async ({ page }) => {
+        await selectMode(page, 'SmartCompression');
+        await setPath(page, 'rootPath', 'C:\\Library');
+        await expect(page.locator('#sumSettings')).toContainText('C:\\Library');
+    });
+
+    test('Scan & repair shows both paths when both are set', async ({ page }) => {
+        await selectMode(page, 'Full');
+        await setPath(page, 'rootPath', 'C:\\Library');
+        await setPath(page, 'repairedPath', 'D:\\Repaired');
+        await expect(page.locator('#sumSettings')).toContainText('C:\\Library');
+        await expect(page.locator('#sumSettings')).toContainText('D:\\Repaired');
+    });
+
+    test('Scan & repair shows a combination when only one path is set', async ({ page }) => {
+        await selectMode(page, 'Full');
+        await setPath(page, 'rootPath', 'C:\\Library');
+        await setPath(page, 'repairedPath', '');
+        await expect(page.locator('#sumSettings')).toContainText('C:\\Library');
+        await expect(page.locator('#sumSettings')).toContainText('No path set');
+    });
+
+});
+
+// ================================================================
 // SUITE 3: Mode — Scan & Repair
 // ================================================================
 test.describe('Mode: Scan & Repair', () => {
@@ -853,6 +911,40 @@ test.describe('Compression Modal Structure', () => {
         expect(byName['A Show']).toBe(true);     // light
     });
 
+});
+
+// ================================================================
+// SUITE 10a: Compression Options summary (Compressed Root)
+// ================================================================
+test.describe('Compression Options summary', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetConfig(page);
+    await seedProbeLog(page, PROBE_FIXTURE);
+    await openReview(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.request.get(`${BASE_URL}/logs/clear`);
+  });
+
+  // Fill the Compressed Root and fire 'input' so updateSummaries() runs.
+  const typeOutput = async (page, value) => {
+    await page.locator('#compressionOutputPath').fill(value);
+    await page.locator('#compressionOutputPath').dispatchEvent('input');
+  };
+
+  test('summary updates when the Compressed Root is typed', async ({ page }) => {
+    await typeOutput(page, 'E:\\Compressed');
+    await expect(page.locator('#sumOptions')).toContainText('E:\\Compressed');
+  });
+
+  test('summary clears back to placeholder when the Compressed Root is emptied', async ({ page }) => {
+    await typeOutput(page, 'E:\\Compressed');
+    await expect(page.locator('#sumOptions')).toContainText('E:\\Compressed');
+    await typeOutput(page, '');
+    await expect(page.locator('#sumOptions')).toContainText('No path set');
+    await expect(page.locator('#sumOptions')).not.toContainText('E:\\Compressed');
+  });
 });
 
 // ================================================================

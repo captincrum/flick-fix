@@ -79,6 +79,7 @@ function Send-File {
 
     $bytes = [System.IO.File]::ReadAllBytes($path)
     $response.ContentType = $contentType
+    $response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     $response.OutputStream.Write($bytes, 0, $bytes.Length)
 }
 
@@ -297,8 +298,14 @@ while ($true) {
 
     switch ($path) {
         # Serve the static UI files.
-        "/"            { Send-File $response "$root\index.html" "text/html" }
-        "/index.html"  { Send-File $response "$root\index.html" "text/html" }
+        "/"            {
+            if ($Global:UM_Status -ne "running") { $Global:UM_Status = "idle" }
+            Send-File $response "$root\index.html" "text/html"
+        }
+        "/index.html"  {
+            if ($Global:UM_Status -ne "running") { $Global:UM_Status = "idle" }
+            Send-File $response "$root\index.html" "text/html"
+        }
         "/style.css"   { Send-File $response "$root\style.css" "text/css" }
         "/app.js"      { Send-File $response "$root\app.js" "application/javascript" }
         "/favicon.ico" { Send-File $response "$root\favicon.ico" "image/x-icon" }

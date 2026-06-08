@@ -1,4 +1,8 @@
 /* ------------------------[           DOM references           ]------------------------ */
+const link = document.createElement("link");
+link.href = "https://fonts.googleapis.com/icon?family=Material+Icons";
+link.rel = "stylesheet";
+document.head.appendChild(link);
 
 const logPane         	= document.getElementById("logPane");
 const splitter        	= document.getElementById("splitter");
@@ -15,7 +19,7 @@ const ENTRY_HEIGHT = ESTIMATED_LINE_HEIGHT * LINES_PER_ENTRY;
 /* ------------------------[          UI state tracking         ]------------------------ */
 
 let logAutoScroll      	= true;
-let logOpen            	= false;
+let logOpen            	= true;
 let isResizing         	= false;
 let startX             	= 0;
 let startWidth         	= 0;
@@ -699,6 +703,7 @@ async function clearLogs() {
 }
 
 async function apiSaveConfig() {
+    updateSummaries();
     const root         = document.getElementById("rootPath").value.trim();
     const repaired     = document.getElementById("repairedPath").value.trim();
     const mode         = document.querySelector("input[name='mode']:checked").value;
@@ -734,7 +739,8 @@ async function loadConfig() {
     if (modeRadio) modeRadio.checked = true;
 
     const isSmartMode = cfg.Mode === "SmartCompression";
-    document.getElementById("smartOptions").classList.toggle("hidden", !isSmartMode);
+    document.getElementById("smartOptions").classList.toggle("locked", !isSmartMode);
+    updateSummaries();
     document.getElementById("compressionOutputPath").value = cfg.CompressionOutputPath || "";
 
     const desc = document.getElementById("smartMethodDesc");
@@ -916,15 +922,101 @@ function toggleLogPane() {
 
 /* ------------------------[        Event wiring: lifecycle     ]------------------------ */
 
+/* ------------------------[ Collapsible sections ]------------------------ */
+function updateSummaries() {
+    const sSet = document.getElementById("sumSettings");
+    if (sSet) {
+        const root = document.getElementById("rootPath").value.trim();
+        sSet.textContent = root || "No folder selected";
+    }
+
+    const sMode = document.getElementById("sumMode");
+    if (sMode) {
+        const checked = document.querySelector("input[name='mode']:checked");
+        sMode.textContent = checked ? checked.closest("label").textContent.trim() : "";
+    }
+
+    const sSmart = document.getElementById("sumSmart");
+    if (sSmart) {
+        const isSmart = document.querySelector("input[name='mode']:checked")?.value === "SmartCompression";
+        if (!isSmart) {
+			sSmart.innerHTML = '<i class="material-icons" style="font-size:13px;color:#A9A9B3;vertical-align:middle;">lock_outline</i>  locked · pick smart compression';
+        } else {
+            const crf = document.getElementById("crfSlider").value;
+            const acc = document.getElementById("accurateMode").checked ? "Accurate" : "Fast";
+            sSmart.textContent = "CRF " + crf + " \u00b7 " + acc;
+        }
+    }
+
+    const sOpt = document.getElementById("sumOptions");
+    if (sOpt) {
+        const r = document.getElementById("compressionOutputPath").value.trim();
+        sOpt.textContent = r || "No folder selected";
+    }
+}
+
+function initCollapsibles() {
+    document.querySelectorAll(".collapse-header").forEach(function (h) {
+        function toggle() {
+            const card = h.closest(".card.group");
+            if (card) card.classList.toggle("collapsed");
+        }
+        h.addEventListener("click", toggle);
+        h.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+        });
+    });
+    updateSummaries();
+}
+
+/* ------------------------[ Theme switcher ]------------------------ */
+const THEMES = [
+    { id: "",           name: "Dark",       accent: "#5b8def" },
+    { id: "sage",       name: "Sage",       accent: "#4aaa88" },
+    { id: "warm-slate", name: "Warm slate", accent: "#e8933e" },
+    { id: "true-black", name: "True black", accent: "#1a2220" }
+];
+const THEME_KEY = "flickfix-theme";
+
+function applyTheme(id) {
+    if (id) document.documentElement.setAttribute("data-theme", id);
+    else    document.documentElement.removeAttribute("data-theme");
+    document.querySelectorAll(".theme-swatch").forEach(el =>
+        el.classList.toggle("active", el.dataset.theme === id));
+}
+
+function initThemeSwitcher() {
+    const wrap = document.getElementById("themeSwatches");
+    if (!wrap) return;
+    THEMES.forEach(t => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "theme-swatch";
+        b.dataset.theme = t.id;
+        b.title = t.name;
+        b.setAttribute("aria-label", t.name + " theme");
+        b.style.setProperty("--swatch", t.accent);
+        b.addEventListener("click", () => {
+            localStorage.setItem(THEME_KEY, t.id);
+            applyTheme(t.id);
+        });
+        wrap.appendChild(b);
+    });
+    applyTheme(localStorage.getItem(THEME_KEY) || "");
+}
+
 window.addEventListener("DOMContentLoaded", () => {
     loadConfig();
     updateClearLogsBtn();
+    initCollapsibles();
+    loadHumanLog();
+    initThemeSwitcher();
 });
 
 document.querySelectorAll("input[name='mode']").forEach(radio => {
     radio.addEventListener("change", () => {
         const isSmartMode = document.querySelector("input[name='mode']:checked")?.value === "SmartCompression";
-        document.getElementById("smartOptions").classList.toggle("hidden", !isSmartMode);
+        document.getElementById("smartOptions").classList.toggle("locked", !isSmartMode);
         applyModeRules();
     });
 });
@@ -1004,62 +1096,60 @@ resumeScrollBtn.addEventListener("click", async () => {
 
 /* ------------------------[      Event wiring: log buttons     ]------------------------ */
 
-humanLogBtn.addEventListener("click", async () => {
-    const isActivating = !humanLogBtn.classList.contains("active");
-
-    humanLogBtn.classList.toggle("active", isActivating);
+async function loadHumanLog() {
+    humanLogBtn.classList.add("active");
     machineLogBtn.classList.remove("active");
+    activeLogMode = "human";
+    logContent.classList.remove("machine-log");
 
-	if (isActivating) {
-		activeLogMode = "human";
-		logContent.classList.remove("machine-log");
-		openLogPane();
+    const meta = await apiLogTotal();
+    if (activeLogMode !== "human") return;
+    fullLogLength = meta.total;
+    windowEnd = fullLogLength;
+    windowStart = Math.max(0, fullLogLength - 200);
 
-		const meta = await apiLogTotal();
-		if (activeLogMode !== "human") return;
-		fullLogLength = meta.total;
-		windowEnd = fullLogLength;
-		windowStart = Math.max(0, fullLogLength - 200);
+    const data = await apiLoadLogSlice(windowStart, windowEnd);
+    if (activeLogMode !== "human") return;
+    currentEntries = data.entries || [];
+    logSpacer.style.height = "0px";
+    logContent.style.top = "0px";
+    renderLogFile(currentEntries);
+    requestAnimationFrame(() => { logViewer.scrollTop = logViewer.scrollHeight; });
+}
 
-		const data = await apiLoadLogSlice(windowStart, windowEnd);
-		if (activeLogMode !== "human") return;
-		currentEntries = data.entries || [];
-		logSpacer.style.height = "0px";
-		logContent.style.top = "0px";
-		renderLogFile(currentEntries);
-		requestAnimationFrame(() => { logViewer.scrollTop = logViewer.scrollHeight; });
-	} else {
-        closeLogPane();
-    }
+async function loadMachineLog() {
+    machineLogBtn.classList.add("active");
+    humanLogBtn.classList.remove("active");
+    activeLogMode = "machine";
+    logContent.classList.add("machine-log");
+
+    const meta = await apiLogTotal();
+    if (activeLogMode !== "machine") return;
+    fullLogLength = meta.total;
+    windowEnd = fullLogLength;
+    windowStart = Math.max(0, fullLogLength - 200);
+
+    const data = await apiLoadLogSlice(windowStart, windowEnd);
+    if (activeLogMode !== "machine") return;
+    currentEntries = data.entries || [];
+    logSpacer.style.height = "0px";
+    logContent.style.top = "0px";
+    renderLogFile(currentEntries);
+    requestAnimationFrame(() => { logViewer.scrollTop = logViewer.scrollHeight; });
+}
+
+// Human/Machine pills live inside the Live log collapse-header; stopPropagation
+// keeps a pill click from also collapsing the pane. Mutually exclusive, no close.
+humanLogBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (activeLogMode === "human") return;
+    loadHumanLog();
 });
 
-machineLogBtn.addEventListener("click", async () => {
-    const isActivating = !machineLogBtn.classList.contains("active");
-
-    machineLogBtn.classList.toggle("active", isActivating);
-    humanLogBtn.classList.remove("active");
-
-	if (isActivating) {
-		activeLogMode = "machine";
-		logContent.classList.add("machine-log");
-		openLogPane();
-
-		const meta = await apiLogTotal();
-		if (activeLogMode !== "machine") return;
-		fullLogLength = meta.total;
-		windowEnd = fullLogLength;
-		windowStart = Math.max(0, fullLogLength - 200);
-
-		const data = await apiLoadLogSlice(windowStart, windowEnd);
-		if (activeLogMode !== "machine") return;
-		currentEntries = data.entries || [];
-		logSpacer.style.height = "0px";
-		logContent.style.top = "0px";
-		renderLogFile(currentEntries);
-		requestAnimationFrame(() => { logViewer.scrollTop = logViewer.scrollHeight; });
-	} else {
-        closeLogPane();
-    }
+machineLogBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (activeLogMode === "machine") return;
+    loadMachineLog();
 });
 
 let searchDebounce = null;
@@ -1117,93 +1207,34 @@ document.getElementById("logFilterClear").addEventListener("click", async () => 
 
 splitter.addEventListener("mousedown", e => {
     if (!logOpen) return;
-
     isResizing = true;
     startX     = e.clientX;
-    startWidth = logPane.getBoundingClientRect().width;
-
-    logPane.classList.add("dragging");
-
     document.body.style.cursor = "col-resize";
     document.body.classList.add("no-select");
 });
 
 window.addEventListener("mousemove", e => {
     if (!isResizing) return;
-
-    const dx = e.clientX - startX;
-    let newWidth = startWidth + dx;
-
-    const shell = document.querySelector(".shell");
-    const shellRect = shell.getBoundingClientRect();
-
-    const leftPane = document.querySelector(".left-pane");
-    const leftRect = leftPane.getBoundingClientRect();
-
-    const splitterWidth = splitter.getBoundingClientRect().width;
-
-    // Dynamically read wrapper padding from CSS
-    const wrapper = document.getElementById("logPaneWrapper");
-    const style = getComputedStyle(wrapper);
-    const padLeft  = parseFloat(style.paddingLeft);
-    const padRight = parseFloat(style.paddingRight);
-    const totalPadding = padLeft + padRight;
-
-    // True max width
-    const available =
-        shellRect.width -
-        leftRect.width -
-        splitterWidth;
-
-    const minWidth = 260;
-    const maxWidth = available;
-
-    newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
-
-    logPane.style.width = newWidth + "px";
+    const row  = document.querySelector(".panes-row");
+    const rect = row.getBoundingClientRect();
+    let ratio  = (e.clientX - rect.left) / rect.width;
+    ratio = Math.max(0.2, Math.min(0.8, ratio));
+    const consolePane = document.getElementById("consolePane");
+    consolePane.style.flex = ratio + " 1 0";
+    logPane.style.flex     = (1 - ratio) + " 1 0";
 });
 
 window.addEventListener("mouseup", () => {
     if (!isResizing) return;
     isResizing = false;
-
-    logPane.classList.remove("dragging");
-
     document.body.style.cursor = "default";
     document.body.classList.remove("no-select");
 });
 
-/* ------------------------[      Splitter double-click toggle  ]------------------------ */
-
+/* Double-click the splitter to reset Console / Live log to 50-50 */
 splitter.addEventListener("dblclick", () => {
-    if (!logOpen) return;
-    const openWidthCSS = getComputedStyle(logPane).getPropertyValue("--open-width").trim();
-    const wrapper = document.getElementById("logPaneWrapper");
-    const wrapperWidth = wrapper.getBoundingClientRect().width;
-    const minWidth = (parseFloat(openWidthCSS) / 100) * wrapperWidth;
-    const paneWidth = logPane.getBoundingClientRect().width;
-    const shell = document.querySelector(".shell");
-    const shellRect = shell.getBoundingClientRect();
-    const leftPane = document.querySelector(".left-pane");
-    const leftRect = leftPane.getBoundingClientRect();
-    const splitterWidth = splitter.getBoundingClientRect().width;
-
-    const maxWidth =
-        shellRect.width -
-        leftRect.width -
-        splitterWidth;
-
-    if (paneWidth > maxWidth) {
-        logPane.style.width = minWidth + "px";
-        return;
-    }
-
-    if (paneWidth >= maxWidth * 0.98) {
-        logPane.style.width = minWidth + "px";
-        return;
-    }
-
-    logPane.style.width = maxWidth + "px";
+    document.getElementById("consolePane").style.flex = "1 1 0";
+    logPane.style.flex = "1 1 0";
 });
 
 
@@ -1867,7 +1898,13 @@ function _filterLeafMatches(row, st) {
     return true;
 }
 
+function updateFilterSummary() {
+    const el = document.getElementById("sumFilter");
+    if (el) el.textContent = _anyFilterActive() ? "Custom" : "Default";
+}
+
 function applyCompressionFilter() {
+    updateFilterSummary();
     const tbody = document.getElementById("compressionTreeBody");
     if (!tbody) return;
 
@@ -2068,6 +2105,7 @@ function initColumnResize() {
 }
 
 async function showCompressionModal() {
+    updateSummaries();
 	const modal   = document.getElementById("compressionModal");
     const tree    = document.getElementById("compressionTree");
     const summary = document.getElementById("compressionSummary");
@@ -2165,6 +2203,7 @@ document.getElementById("compressionBrowse").addEventListener("click", async () 
     const result = await apiBrowseFolder();
     if (result.ok) {
         document.getElementById("compressionOutputPath").value = result.path;
+        updateSummaries();
     }
 });
 
@@ -2315,12 +2354,13 @@ async function unifiedPoll() {
             showCompressionModal();
         }
 
-        if (runState === "running") {
-            badge.classList.remove("idle");
-            badge.classList.add("running");
-        } else {
-            badge.classList.remove("running");
-            badge.classList.add("idle");
+        badge.classList.remove("idle", "running", "completed");
+        badge.classList.add(
+            runState === "running"   ? "running"   :
+            runState === "completed" ? "completed" : "idle"
+        );
+
+        if (runState !== "running") {
             document.getElementById("startBtn").classList.remove("running");
             currentPhase       = "none";
             lastRepairStatus   = null;

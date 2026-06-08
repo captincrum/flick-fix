@@ -9,184 +9,193 @@
 <body>
 <div id="app">
 
-    <!-- TOP HEADER (Copilot style) -->
+    <!-- TOP HEADER -->
     <header class="top-header">
         <h1>FlickFix</h1>
-        <div id="statusBadge" class="badge idle">Idle</div>
+        <div class="header-right">
+            <div id="themeSwatches" class="theme-swatches"></div>
+            <div id="statusBadge" class="badge idle">Idle</div>
+        </div>
     </header>
 
-    <!-- MAIN SHELL: LEFT (original layout) + SPLITTER + LOG PANEL -->
+    <!-- MAIN SHELL -->
     <div class="shell">
 
-        <!-- LEFT COLUMN -->
-        <section class="left-pane">
+        <div class="main-row">
+        <div class="cards-row">
+			<div class="card group collapsed">
+				<div class="collapse-header" role="button" tabindex="0">
+					<h2 class="group-title">Settings</h2>
+					<svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+				</div>
+				<span class="collapse-summary" id="sumSettings"></span>
 
-            <!-- TOP BLOCK: scrollable region (Settings + Mode + Status) -->
-            <div class="top-block">
+				<div class="field">
+					<label>Library Root:</label>
+					<div class="field-row">
+						<input id="rootPath" type="text" placeholder="Select library root..." />
+						<button id="browseRoot" class="btn small">Browse</button>
+					</div>
+				</div>
 
-                <!-- SETTINGS -->
-                <div class="card group">
-                    <h2 class="group-title">Settings</h2>
+				<div class="field">
+					<label>Repaired Root:</label>
+					<div class="field-row">
+						<input id="repairedPath" type="text" placeholder="Select output folder..." />
+						<button id="browseRepaired" class="btn small">Browse</button>
+					</div>
+				</div>
 
-                    <div class="field">
-                        <label>Library Root:</label>
-                        <div class="field-row">
-                            <input id="rootPath" type="text" placeholder="Select library root..." />
-                            <button id="browseRoot" class="btn small">Browse</button>
-                        </div>
-                    </div>
+				<div class="toggle-row has-tip" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
+					<div style="display:flex; align-items:center; gap:10px; width:100%;">
+						<span class="toggle-label">Workers</span>
+						<input type="range" id="workerCount" min="1" max="8" value="4" style="flex:1;" />
+						<span id="workerValue" class="toggle-label">4</span>
+					</div>
+					<span id="workerDesc" class="tip-bubble">Recommended — balance of speed and CPU resources</span>
+				</div>
 
-                    <div class="field">
-                        <label>Repaired Root:</label>
-                        <div class="field-row">
-                            <input id="repairedPath" type="text" placeholder="Select output folder..." />
-                            <button id="browseRepaired" class="btn small">Browse</button>
-                        </div>
-                    </div>
+				<div class="toggle-row">
+					<div class="scan-toggle-group has-tip">
+						<span class="toggle-label">Quick</span>
+						<label class="toggle-switch">
+							<input type="checkbox" id="scanAllEpisodes" />
+							<span class="toggle-track"></span>
+						</label>
+						<span class="toggle-label">Full</span>
+						<span id="scanModeDesc" class="tip-bubble">First episode per season</span>
+					</div>
 
-                    <div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
-                        <div style="display:flex; align-items:center; gap:10px; width:100%;">
-                            <span class="toggle-label">Workers</span>
-                            <input type="range" id="workerCount" min="1" max="8" value="4" style="flex:1;" />
-                            <span id="workerValue" class="toggle-label">4</span>
-                        </div>
-                        <p id="workerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
-                    </div>
+					<div class="gpu-toggle-group has-tip">
+						<span class="toggle-label">CPU</span>
+						<label class="toggle-switch">
+							<input type="checkbox" id="useGPU" />
+							<span class="toggle-track"></span>
+						</label>
+						<span class="toggle-label">GPU</span>
+						<span id="gpuStatusDesc" class="tip-bubble gpu-status">Detecting GPU…</span>
+					</div>
+				</div>
+			</div>
 
-                    <div class="toggle-row">
-                        <div class="scan-toggle-group">
-                            <span class="toggle-label">Quick</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="scanAllEpisodes" />
-                                <span class="toggle-track"></span>
-                            </label>
-                            <span class="toggle-label">Full</span>
-                        </div>
+			<div class="card group collapsed">
+				<div class="collapse-header" role="button" tabindex="0">
+					<h2 class="group-title">Operation mode</h2>
+					<svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+				</div>
+				<span class="collapse-summary" id="sumMode"></span>
 
-                        <div class="gpu-toggle-group">
-                            <span class="toggle-label">CPU</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="useGPU" />
-                                <span class="toggle-track"></span>
-                            </label>
-                            <span class="toggle-label">GPU</span>
-                        </div>
-                    </div>
+				<div class="mode-row" style="flex-wrap: wrap; row-gap: 6px;">
+					<label><input type="radio" name="mode" value="Full" checked /> Scan & repair</label>
+					<label><input type="radio" name="mode" value="ScanOnly" /> Scan</label>
+					<label><input type="radio" name="mode" value="RepairOnly" /> Repair</label>
+					<label><input type="radio" name="mode" value="SmartCompression" /> Smart compression</label>
+				</div>
+			</div>
 
-                    <div class="desc-row">
-                        <p id="scanModeDesc" class="smart-desc">First episode per season</p>
-                        <p id="gpuStatusDesc" class="smart-desc gpu-status">Detecting GPU…</p>
-                    </div>
-                </div>
+			<div id="smartOptions" class="card group collapsed">
+				<div class="collapse-header" role="button" tabindex="0">
+					<h2 class="group-title">Smart compression</h2>
+					<svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+				</div>
+				<span class="collapse-summary" id="sumSmart"></span>
 
-                <!-- MODE (radio buttons) -->
-                <div class="card group">
-                    <h2 class="group-title">Operation Mode</h2>
-                    <div class="mode-row" style="flex-wrap: wrap; row-gap: 6px;">
-                        <label><input type="radio" name="mode" value="Full" checked /> Scan & Repair</label>
-                        <label><input type="radio" name="mode" value="ScanOnly" /> Scan</label>
-                        <label><input type="radio" name="mode" value="RepairOnly" /> Repair</label>
-                        <label><input type="radio" name="mode" value="SmartCompression" /> Smart Compression</label>
-                    </div>
-                </div>
+				<div class="toggle-row review-row">
+					<div class="has-tip" style="display:flex; align-items:center; gap:8px;">
+						<span class="toggle-label">Fast</span>
+						<label class="toggle-switch">
+							<input type="checkbox" id="accurateMode" />
+							<span class="toggle-track"></span>
+						</label>
+						<span class="toggle-label">Accurate</span>
+						<span id="smartMethodDesc" class="tip-bubble">Quick results across your entire library</span>
+					</div>
+					<button id="reviewBtn" class="btn small disabled-ui" style="margin-left: auto;">Review</button>
+				</div>
 
-                <!-- SMART COMPRESSION OPTIONS (hidden unless SmartCompression selected) -->
-                <div id="smartOptions" class="card group hidden">
-                    <h2 class="group-title">Smart Compression Mode</h2>
-                    <div class="toggle-row">
-                        <span class="toggle-label">Fast</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="accurateMode" />
-                            <span class="toggle-track"></span>
-                        </label>
-                        <span class="toggle-label">Accurate</span>
-                        <button id="reviewBtn" class="btn small disabled-ui" style="margin-left: auto;">Review</button>
-                    </div>
-                    <p id="smartMethodDesc" class="smart-desc">Quick results across your entire library</p>
-
-                    <div class="toggle-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
-                        <div style="display:flex; align-items:center; gap:10px; width:100%;">
-                            <span class="toggle-label">CRF</span>
-                            <input type="range" id="crfSlider" min="18" max="28" value="22" style="flex:1;" />
-                            <span id="crfValue" class="toggle-label">22</span>
-                        </div>
-                        <p id="crfDesc" class="smart-desc">Recommended - ~97.5% quality retained</p>
-                    </div>
-                </div>
-
-                <!-- STATUS (console-style text) -->
-                <div class="card group status-group">
-                    <h2 class="group-title">Console</h2>
-                    <pre id="consoleOutput" class="console"></pre>
-                </div>
-
-            </div> <!-- end .top-block -->
-
-            <!-- BOTTOM BUTTONS: anchored to bottom of left-pane -->
-            <div class="bottom-fixed">
-                <div class="bottom-row">
-                    <div class="button-column">
-                        <button id="startBtn" class="btn primary">Start</button>
-                        <button id="cancelBtn" class="btn danger">Cancel</button>
-                    </div>
-                    <div class="button-column">
-                        <button id="humanLogBtn" class="btn toggle">Human Log</button>
-                        <button id="machineLogBtn" class="btn toggle">Machine Log</button>
-                    </div>
-                </div>
+				<div class="toggle-row has-tip" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px;">
+					<div style="display:flex; align-items:center; gap:10px; width:100%;">
+						<span class="toggle-label">CRF</span>
+						<input type="range" id="crfSlider" min="18" max="28" value="22" style="flex:1;" />
+						<span id="crfValue" class="toggle-label">22</span>
+					</div>
+					<span id="crfDesc" class="tip-bubble">Recommended - ~97.5% quality retained</span>
+				</div>
+			</div>
+        <div class="left-buttons">
+                <button id="startBtn" class="btn primary">Start</button>
+                <button id="cancelBtn" class="btn danger">Cancel</button>
             </div>
+        </div>
 
-        </section>
-
-        <!-- SPLITTER -->
-        <div id="splitter" class="splitter"></div>
-
-        <!-- RIGHT LOG PANEL (Live Log) -->
-        <div id="logPaneWrapper" class="log-pane-wrapper">
-            <aside id="logPane" class="log-pane">
-                <div class="card group log-group">
-                    <div class="group-title-wrapper" style="display:flex; align-items:center; justify-content:space-between; width:100%; min-width:0; overflow:hidden;">
-                        <h2 class="group-title" style="margin:0; white-space:nowrap; flex-shrink:0;">Live Log</h2>
-                        <div id="logFilterRow" class="log-filter-row">
-                            <input id="logFilterInput" type="text" placeholder="Search Filter..." />
-                            <span id="logFilterCount" class="log-filter-count"></span>
-                            <button id="logFilterClear" class="btn small">✕</button>
+        <div class="panes-row">
+                    <div class="card group status-group pane" id="consolePane">
+                        <div class="collapse-header" role="button" tabindex="0">
+                            <div class="collapse-titlewrap">
+                                <h2 class="group-title">Console</h2>
+                            </div>
+                            <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                         </div>
+                        <pre id="consoleOutput" class="console"></pre>
                     </div>
 
-                    <div id="logViewer" class="log-viewer">
-                        <div id="logSpacer" class="log-spacer"></div>
-                        <div id="logContent" class="log-content"></div>
-                    </div>
+            <div id="splitter" class="splitter"></div>
 
-                    <button id="resumeScrollBtn" class="resume-scroll hidden">⮟</button>
-
-                    <div class="log-footer">
-                        <button id="clearLogsBtn" class="btn danger small">Clear Logs</button>
+            <aside id="logPane" class="card group log-group pane">
+                <div class="collapse-header" role="button" tabindex="0">
+                    <div class="collapse-titlewrap">
+                        <h2 class="group-title">Live log</h2>
                     </div>
+                    <div class="log-header-controls">
+                        <div class="log-mode-toggle">
+                            <button id="humanLogBtn" class="btn toggle active">Human</button>
+                            <button id="machineLogBtn" class="btn toggle">Machine</button>
+                        </div>
+                        <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <div id="logFilterRow" class="log-filter-row">
+                    <button id="clearLogsBtn" class="btn danger small">Clear Logs</button>
+                    <input id="logFilterInput" type="text" placeholder="Search Filter..." />
+                    <span id="logFilterCount" class="log-filter-count"></span>
+                    <button id="logFilterClear" class="btn small">✕</button>
+                </div>
+
+                <div id="logViewer" class="log-viewer">
+                    <div id="logSpacer" class="log-spacer"></div>
+                    <div id="logContent" class="log-content"></div>
+                </div>
+
+                <button id="resumeScrollBtn" class="resume-scroll hidden">⮟</button>
+
+                <div class="log-footer">
+                    <button id="clearLogsBtn" class="btn danger small">Clear Logs</button>
                 </div>
             </aside>
         </div>
 
+        </div>
     </div>
 </div>
+
 <!-- COMPRESSION RESULTS MODAL -->
 <div id="compressionModal" class="modal hidden">
     <div class="compression-modal-content">
-
-        <!-- HEADER -->
         <div class="compression-header">
-            <h2>Smart Compression Review</h2>
+            <h2>Smart compression review</h2>
             <button id="compressionClose" class="compression-close">✕</button>
         </div>
-
-        <!-- BODY -->
         <div class="compression-body">
-
-            <!-- LEFT PANEL -->
             <div class="compression-left">
                 <div class="card group">
-                    <h2 class="group-title">Options</h2>
+                    <div class="collapse-header" role="button" tabindex="0">
+                        <div class="collapse-titlewrap">
+                            <h2 class="group-title">Options</h2>
+                        </div>
+                        <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+					<span class="collapse-summary" id="sumOptions"></span>
                     <div class="compression-output-section">
                         <label class="comp-label">Compressed Root:</label>
                         <div class="field-row">
@@ -194,108 +203,112 @@
                             <button id="compressionBrowse" class="btn small">Browse</button>
                         </div>
                     </div>
-                    <div class="toggle-row" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px;">
+                    <div class="toggle-row has-tip" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px;">
                         <div style="display:flex; align-items:center; gap:10px; width:100%;">
                             <span class="toggle-label">Workers</span>
                             <input type="range" id="compressWorkerCount" min="1" max="8" value="2" style="flex:1;" />
                             <span id="compressWorkerValue" class="toggle-label">2</span>
                         </div>
-                        <p id="compressWorkerDesc" class="smart-desc">Recommended — balance of speed and CPU resources</p>
+                        <span id="compressWorkerDesc" class="tip-bubble">Recommended — balance of speed and CPU resources</span>
                     </div>
-                    <div class="toggle-row gpu-toggle-group-modal" style="margin-top:8px;">
+                    <div class="toggle-row gpu-toggle-group-modal has-tip" style="margin-top:8px;">
                         <span class="toggle-label">CPU</span>
                         <label class="toggle-switch">
                             <input type="checkbox" id="compressUseGPU" />
                             <span class="toggle-track"></span>
                         </label>
                         <span class="toggle-label">GPU</span>
+                        <span id="compressGpuStatusDesc" class="tip-bubble"></span>
                     </div>
-                    <p id="compressGpuStatusDesc" class="smart-desc" style="margin:2px 0 0 0;"></p>
                 </div>
 
-                <div class="card group" style="margin-top:16px;">
-					<h2 class="group-title">Filter By</h2>
+                <div class="card group" style="margin-top:0px;">
+                    <div class="collapse-header" role="button" tabindex="0">
+                        <div class="collapse-titlewrap">
+                            <h2 class="group-title">Filter by</h2>
+                        </div>
+                        <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+					<span class="collapse-summary" id="sumFilter"></span>
 
-					<div class="filter-cols">
-						<div class="filter-col" id="filterConfCol">
-							<label class="comp-label">Confidence Level</label>
-							<label class="filter-check"><input type="checkbox" id="filterConfHigh" checked /> High</label>
-							<label class="filter-check"><input type="checkbox" id="filterConfMedium" checked /> Medium</label>
-							<label class="filter-check"><input type="checkbox" id="filterConfLow" checked /> Low</label>
-						</div>
-						<div class="filter-col">
-							<label class="comp-label">Video Resolution</label>
-							<label class="filter-check"><input type="checkbox" id="filterRes720" checked /> ≤720p</label>
-							<label class="filter-check"><input type="checkbox" id="filterRes1080" checked /> 1080p</label>
-							<label class="filter-check"><input type="checkbox" id="filterRes4k" checked /> ≥4K</label>
-						</div>
-					</div>
+                    <div class="filter-cols">
+                        <div class="filter-col" id="filterConfCol">
+                            <label class="comp-label">Confidence level</label>
+                            <label class="filter-check"><input type="checkbox" id="filterConfHigh" checked /> High</label>
+                            <label class="filter-check"><input type="checkbox" id="filterConfMedium" checked /> Medium</label>
+                            <label class="filter-check"><input type="checkbox" id="filterConfLow" checked /> Low</label>
+                        </div>
+                        <div class="filter-col">
+                            <label class="comp-label">Video resolution</label>
+                            <label class="filter-check"><input type="checkbox" id="filterRes720" checked /> ≤720p</label>
+                            <label class="filter-check"><input type="checkbox" id="filterRes1080" checked /> 1080p</label>
+                            <label class="filter-check"><input type="checkbox" id="filterRes4k" checked /> ≥4K</label>
+                        </div>
+                    </div>
 
-					<div class="filter-section filter-row-inline">
-						<label class="comp-label">Minimum savings of</label>
-						<div class="num-field">
-							<div class="num-stepper">
-								<input type="number" id="filterMinMB" min="1" max="9999" step="10" placeholder="—" />
-								<div class="num-stepper-arrows">
-									<button type="button" class="num-step num-up" data-target="filterMinMB">▲</button>
-									<button type="button" class="num-step num-down" data-target="filterMinMB">▼</button>
-								</div>
-							</div>
-							<span class="num-unit">MB</span>
-						</div>
-					</div>
+                    <div class="filter-section filter-row-inline">
+                        <label class="comp-label">Minimum savings of</label>
+                        <div class="num-field">
+                            <div class="num-stepper">
+                                <input type="number" id="filterMinMB" min="1" max="9999" step="10" placeholder="—" />
+                                <div class="num-stepper-arrows">
+                                    <button type="button" class="num-step num-up" data-target="filterMinMB">▲</button>
+                                    <button type="button" class="num-step num-down" data-target="filterMinMB">▼</button>
+                                </div>
+                            </div>
+                            <span class="num-unit">MB</span>
+                        </div>
+                    </div>
 
-					<div class="filter-section filter-row-inline">
-						<label class="comp-label">Minimum savings of</label>
-						<div class="num-field">
-							<div class="num-stepper">
-								<input type="number" id="filterMinPct" min="10" max="95" step="1" placeholder="—" />
-								<div class="num-stepper-arrows">
-									<button type="button" class="num-step num-up" data-target="filterMinPct">▲</button>
-									<button type="button" class="num-step num-down" data-target="filterMinPct">▼</button>
-								</div>
-							</div>
-							<span class="num-unit">%</span>
-						</div>
-					</div>
+                    <div class="filter-section filter-row-inline">
+                        <label class="comp-label">Minimum savings of</label>
+                        <div class="num-field">
+                            <div class="num-stepper">
+                                <input type="number" id="filterMinPct" min="10" max="95" step="1" placeholder="—" />
+                                <div class="num-stepper-arrows">
+                                    <button type="button" class="num-step num-up" data-target="filterMinPct">▲</button>
+                                    <button type="button" class="num-step num-down" data-target="filterMinPct">▼</button>
+                                </div>
+                            </div>
+                            <span class="num-unit">%</span>
+                        </div>
+                    </div>
 
-					<div class="filter-section filter-row-inline">
-						<select id="filterCapMode" class="filter-select">
-							<option value="none">No limit</option>
-							<option value="topn">Top savers</option>
-							<option value="reclaim">Total saved</option>
-							<option value="fit">Size after</option>
-						</select>
-						<div class="num-field hidden" id="filterCapField">
-							<div class="num-stepper">
-								<input type="number" id="filterCapValue" min="10" max="99999" step="10" placeholder="—" />
-								<div class="num-stepper-arrows">
-									<button type="button" class="num-step num-up" data-target="filterCapValue">▲</button>
-									<button type="button" class="num-step num-down" data-target="filterCapValue">▼</button>
-								</div>
-							</div>
-							<span class="num-unit" id="filterCapUnit">files</span>
-						</div>
-					</div>
+                    <div class="filter-section filter-row-inline">
+                        <select id="filterCapMode" class="filter-select">
+                            <option value="none">No limit</option>
+                            <option value="topn">Top savers</option>
+                            <option value="reclaim">Total saved</option>
+                            <option value="fit">Size after</option>
+                        </select>
+                        <div class="num-field hidden" id="filterCapField">
+                            <div class="num-stepper">
+                                <input type="number" id="filterCapValue" min="10" max="99999" step="10" placeholder="—" />
+                                <div class="num-stepper-arrows">
+                                    <button type="button" class="num-step num-up" data-target="filterCapValue">▲</button>
+                                    <button type="button" class="num-step num-down" data-target="filterCapValue">▼</button>
+                                </div>
+                            </div>
+                            <span class="num-unit" id="filterCapUnit">files</span>
+                        </div>
+                    </div>
 
-					<div class="filter-reset-row" style="display:flex; justify-content:space-between; margin-top:12px;">
-						<button id="filterReset" class="btn small">Reset Filters</button>
-						<button id="filterResetChecks" class="btn small">Reset Checkbox</button>
-					</div>
-				</div>
-				
-				<div class="card group" style="margin-top:16px;">
-					<h2 class="group-title">Summary</h2>
+                    <div class="filter-reset-row" style="display:flex; justify-content:space-between; margin-top:12px;">
+                        <button id="filterReset" class="btn small">Reset Filters</button>
+                        <button id="filterResetChecks" class="btn small">Reset Checkbox</button>
+                    </div>
+                </div>
+
+                <div class="card group" style="margin-top:0px;">
+                    <h2 class="group-title">Summary</h2>
                     <div class="compression-summary" id="compressionSummary"></div>
                 </div>
 
                 <button id="compressionStart" class="btn primary compression-start-btn">Compress</button>
             </div>
 
-            <!-- DIVIDER -->
             <div class="compression-divider"></div>
 
-            <!-- RIGHT PANEL: TREE -->
             <div class="compression-right">
                 <div class="card group compression-tree-wrapper">
                     <table id="compressionTree" class="compression-tree">
@@ -324,6 +337,7 @@
         </div>
     </div>
 </div>
+
 <div id="confirmModal" class="modal hidden">
     <div class="modal-content">
         <p>
@@ -331,13 +345,13 @@
             This action cannot be undone.<br><br>
             Do you want to continue?
         </p>
-
         <div class="modal-buttons">
             <button id="confirmYes">OK</button>
             <button id="confirmNo">Cancel</button>
         </div>
     </div>
 </div>
+
 <div id="errorModal" class="modal hidden">
     <div class="modal-content">
         <p id="errorMessage"></p>
@@ -346,6 +360,7 @@
         </div>
     </div>
 </div>
+
 <script src="app.js"></script>
 </body>
 </html>

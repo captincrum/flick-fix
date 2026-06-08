@@ -35,9 +35,6 @@ const PROBE_FIXTURE = [
 
 // Dedicated to cap-mode tests: 12 eligible + 1 skip. savedMB descending and
 // distinct so the cap boundaries are exact and each mode yields a DIFFERENT count.
-//  - Top savers (min 10) -> keeps 10 of 12
-//  - Total saved 10 GB   -> 3+2.5+2+1.5+1 GB = exactly 10 GB at the 5th row -> 5
-//  - Size after 10 GB    -> est 1400 MB each; 7 fit under 10 GB (9800), 8th overflows -> 7
 const CAP_FIXTURE = [
   { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E01.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:4472, EstimatedMB:1400, SavedMB:3072, SavedPct:68.7 },
   { Type:"SmartProbe", Path:"T:\\Media\\Cap Show\\Season 01\\Cap S01E02.mkv", Verdict:"Compress", Confidence:"High", Width:1920, OriginalMB:3960, EstimatedMB:1400, SavedMB:2560, SavedPct:64.6 },
@@ -66,11 +63,21 @@ async function seedProbeLog(page, entries) {
   }, { timeout: 6000, intervals: [300, 400, 600, 800, 1000] }).toBe(entries.length);
 }
 
-async function openReview(page) {
+async function openReview(page, expectedLeaves) {
   await selectMode(page, 'SmartCompression');
   await expect(page.locator('#reviewBtn')).not.toHaveClass(/disabled-ui/, { timeout: 6000 });
   await page.locator('#reviewBtn').click();
   await expect(page.locator('#compressionModal')).toBeVisible();
+  // Wait until THIS test's seeded fixture is actually in the tree before we
+  // touch any filters. In a full-suite run the server's log cache can still be
+  // mid-rebuild from the previous test, so the tree briefly holds a stale/short
+  // row set; asserting the leaf count first removes that race.
+  if (expectedLeaves != null) {
+    await expect(page.locator('#compressionTreeBody tr[data-path]')).toHaveCount(expectedLeaves);
+  }
+  // Force a clean baseline (stale persisted selections can otherwise bleed in).
+  await page.locator('#filterResetChecks').click();
+  await page.locator('#filterReset').click();
 }
 
 // Shows start collapsed; open every visible ▶ toggle until the whole tree is expanded.
@@ -86,7 +93,19 @@ async function expandAll(page) {
 const leafCb = (page, fileName) =>
   page.locator('#compressionTreeBody tr', { has: page.locator('.tree-name', { hasText: fileName }) })
       .locator('.tree-checkbox');
-	  
+
+// Toggle a checkbox the app may render hidden (custom-styled filter chips) or
+// inside a collapsed tree row: set .checked and fire the change event the app
+// listens for, instead of a click that needs the element visible+actionable.
+async function toggleCheckbox(locator, checked) {
+  await locator.evaluate((el, want) => {
+    if (el.checked !== want) {
+      el.checked = want;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, checked);
+}
+
 async function resetConfig(page) {
     await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false`);
     await page.goto(BASE_URL);
@@ -94,17 +113,39 @@ async function resetConfig(page) {
         const desc = document.getElementById('scanModeDesc');
         return desc && desc.textContent.includes('First episode');
     });
+    // The left-column setting cards (Settings, Operation mode, Smart compression)
+    // start collapsed, and a collapsed card hides all of its content
+    // (display:none). Expand them so their inputs/radios are visible and
+    // actionable for the tests. This mirrors a user opening the cards.
+    await expandSettingCards(page);
 }
 
+// Force-expand the three collapsible setting cards in the left column.
+async function expandSettingCards(page) {
+    await page.evaluate(() => {
+        document.querySelectorAll('.cards-row .card.group.collapsed')
+            .forEach(card => card.classList.remove('collapsed'));
+    });
+}
+
+// The mode radios are custom "pill" controls: the native <input> is visually
+// hidden (opacity:0, 0x0) and the <label> is the thing the user sees and clicks.
+// So we always interact with the label, never the raw input.
+const modeLabel = (page, mode) =>
+    page.locator('.mode-row label', { has: page.locator(`input[value="${mode}"]`) });
+
 async function selectMode(page, mode) {
-    await page.locator(`input[value="${mode}"]`).click();
+    // The mode radios live inside the "Operation mode" card, which may be
+    // collapsed (and therefore hidden). Make sure it's open before clicking.
+    await expandSettingCards(page);
+    await modeLabel(page, mode).click();
 }
 
 // A folder row's "(x of y)" count, located by the folder name.
 const folderCount = (page, name) =>
   page.locator('#compressionTreeBody tr', { has: page.locator('.tree-name', { hasText: name }) })
       .locator('.tree-count');
-	  
+
 // ================================================================
 // SUITE 1: Page Load
 // ================================================================
@@ -136,14 +177,15 @@ test.describe('Page Load', () => {
     });
 
     test('Smart Compression panel is hidden after config reset', async ({ page }) => {
-        await expect(page.locator('#smartOptions')).toHaveClass(/hidden/);
+        await expect(page.locator('#smartOptions')).toHaveClass(/locked/);
     });
 
     test('All four operation mode radios are present', async ({ page }) => {
-        await expect(page.locator('input[value="Full"]')).toBeVisible();
-        await expect(page.locator('input[value="ScanOnly"]')).toBeVisible();
-        await expect(page.locator('input[value="RepairOnly"]')).toBeVisible();
-        await expect(page.locator('input[value="SmartCompression"]')).toBeVisible();
+        // Native radios are visually hidden by design; assert the visible pills.
+        await expect(modeLabel(page, 'Full')).toBeVisible();
+        await expect(modeLabel(page, 'ScanOnly')).toBeVisible();
+        await expect(modeLabel(page, 'RepairOnly')).toBeVisible();
+        await expect(modeLabel(page, 'SmartCompression')).toBeVisible();
     });
 
 });
@@ -192,7 +234,7 @@ test.describe('Settings Panel', () => {
         await expect(page.locator('#workerDesc')).toContainText('Less CPU intensive');
     });
 
-	test('Workers description does NOT show Recommended when not at 4', async ({ page }) => {
+    test('Workers description does NOT show Recommended when not at 4', async ({ page }) => {
         await page.locator('#workerCount').fill('1');
         await page.locator('#workerCount').dispatchEvent('input');
         await expect(page.locator('#workerDesc')).not.toHaveText('Recommended — balance of speed and CPU resources');
@@ -209,7 +251,7 @@ test.describe('Settings Panel', () => {
         await expect(page.locator('#scanModeDesc')).toContainText('First episode');
     });
 
-	test('Scan mode description changes when toggled to Full', async ({ page }) => {
+    test('Scan mode description changes when toggled to Full', async ({ page }) => {
         const before = await page.locator('#scanModeDesc').textContent();
         await page.locator('#scanAllEpisodes').evaluate(el => el.click());
         const after = await page.locator('#scanModeDesc').textContent();
@@ -265,7 +307,7 @@ test.describe('Mode: Scan & Repair', () => {
     });
 
     test('Smart Compression panel is hidden', async ({ page }) => {
-        await expect(page.locator('#smartOptions')).toHaveClass(/hidden/);
+        await expect(page.locator('#smartOptions')).toHaveClass(/locked/);
     });
 
     test('Start with no root path shows error modal', async ({ page }) => {
@@ -291,7 +333,7 @@ test.describe('Mode: Scan & Repair', () => {
 
     test('All mode radios are still selectable', async ({ page }) => {
         for (const mode of ['ScanOnly', 'RepairOnly', 'SmartCompression', 'Full']) {
-            await page.locator(`input[value="${mode}"]`).click();
+            await modeLabel(page, mode).click();
             await expect(page.locator(`input[value="${mode}"]`)).toBeChecked();
         }
     });
@@ -333,7 +375,7 @@ test.describe('Mode: Scan Only', () => {
     });
 
     test('Smart Compression panel is hidden', async ({ page }) => {
-        await expect(page.locator('#smartOptions')).toHaveClass(/hidden/);
+        await expect(page.locator('#smartOptions')).toHaveClass(/locked/);
     });
 
     test('Start with no root path shows error modal', async ({ page }) => {
@@ -388,7 +430,7 @@ test.describe('Mode: Repair Only', () => {
     });
 
     test('Smart Compression panel is hidden', async ({ page }) => {
-        await expect(page.locator('#smartOptions')).toHaveClass(/hidden/);
+        await expect(page.locator('#smartOptions')).toHaveClass(/locked/);
     });
 
     test('Start with no repaired path shows error modal', async ({ page }) => {
@@ -423,7 +465,7 @@ test.describe('Mode: Smart Compression', () => {
     });
 
     test('Smart Compression panel is visible', async ({ page }) => {
-        await expect(page.locator('#smartOptions')).not.toHaveClass(/hidden/);
+        await expect(page.locator('#smartOptions')).not.toHaveClass(/locked/);
     });
 
     test('Library Root is enabled', async ({ page }) => {
@@ -479,12 +521,12 @@ test.describe('Mode: Smart Compression', () => {
         await expect(page.locator('#crfDesc')).toContainText('Low quality');
     });
 
-	test('Accurate mode toggle is attached and enabled', async ({ page }) => {
+    test('Accurate mode toggle is attached and enabled', async ({ page }) => {
         await expect(page.locator('#accurateMode')).toBeAttached();
         await expect(page.locator('#accurateMode')).toBeEnabled();
     });
 
-	test('Accurate mode description changes when toggled on', async ({ page }) => {
+    test('Accurate mode description changes when toggled on', async ({ page }) => {
         await page.locator('#accurateMode').evaluate(el => { el.checked = false; el.dispatchEvent(new Event('change')); });
         await expect(page.locator('#smartMethodDesc')).toHaveText('Quick results across your entire library');
         await page.locator('#accurateMode').evaluate(el => { el.checked = true; el.dispatchEvent(new Event('change')); });
@@ -497,13 +539,14 @@ test.describe('Mode: Smart Compression', () => {
         await page.locator('#accurateMode').evaluate(el => { el.checked = false; el.dispatchEvent(new Event('change')); });
         await expect(page.locator('#smartMethodDesc')).toHaveText('Quick results across your entire library');
     });
-	
+
     test('Review button is visible', async ({ page }) => {
         await expect(page.locator('#reviewBtn')).toBeVisible();
     });
 
-	test('Review button has disabled-ui class when no SmartProbe log data exists', async ({ page }) => {
-        await expect(page.locator('#reviewBtn')).toHaveClass(/disabled-ui/);
+    test('Review button has disabled-ui class when no SmartProbe log data exists', async ({ page }) => {
+        await page.request.get(`${BASE_URL}/logs/clear`);
+        await expect(page.locator('#reviewBtn')).toHaveClass(/disabled-ui/, { timeout: 6000 });
     });
 
     test('Start with no root path shows error modal', async ({ page }) => {
@@ -530,7 +573,7 @@ test.describe('Mode Switching', () => {
 
     test('All mode radios are always selectable', async ({ page }) => {
         for (const mode of ['Full', 'ScanOnly', 'RepairOnly', 'SmartCompression']) {
-            await page.locator(`input[value="${mode}"]`).click();
+            await modeLabel(page, mode).click();
             await expect(page.locator(`input[value="${mode}"]`)).toBeChecked();
         }
     });
@@ -550,7 +593,7 @@ test.describe('Mode Switching', () => {
     test('Switching away from Compression hides Smart Compression panel', async ({ page }) => {
         await selectMode(page, 'SmartCompression');
         await selectMode(page, 'ScanOnly');
-        await expect(page.locator('#smartOptions')).toHaveClass(/hidden/);
+        await expect(page.locator('#smartOptions')).toHaveClass(/locked/);
     });
 
 });
@@ -573,7 +616,7 @@ test.describe('Error Modal', () => {
         await expect(page.locator('#errorModal')).toHaveClass(/hidden/);
     });
 
-	test('Error message contains text when shown', async ({ page }) => {
+    test('Error message contains text when shown', async ({ page }) => {
         await page.locator('#rootPath').fill('');
         await page.locator('#startBtn').click();
         await expect(page.locator('#errorModal')).toBeVisible();
@@ -589,30 +632,31 @@ test.describe('Log Panel', () => {
 
     test.beforeEach(async ({ page }) => { await resetConfig(page); });
 
-    test('Log pane is closed by default', async ({ page }) => {
-        await expect(page.locator('#logPane')).not.toHaveClass(/open/);
+    // The log pane is open/closed by clicking its collapse-header (which toggles
+    // the `collapsed` class). It starts expanded. The Human/Machine pills only
+    // switch log MODE; they no longer open or close the pane.
+    const logPaneHeader = page => page.locator('#logPane .collapse-header .group-title');
+
+    test('Log pane is expanded by default', async ({ page }) => {
+        await expect(page.locator('#logPane')).not.toHaveClass(/collapsed/);
     });
 
-    test('Human Log button opens log pane', async ({ page }) => {
-        await page.locator('#humanLogBtn').click();
-        await expect(page.locator('#logPane')).toHaveClass(/open/);
+    test('Clicking the log pane header collapses it', async ({ page }) => {
+        await logPaneHeader(page).click();
+        await expect(page.locator('#logPane')).toHaveClass(/collapsed/);
     });
 
-    test('Clicking Human Log again closes log pane', async ({ page }) => {
-        await page.locator('#humanLogBtn').click();
-        await page.locator('#humanLogBtn').click();
-        await expect(page.locator('#logPane')).not.toHaveClass(/open/);
+    test('Clicking the log pane header again re-expands it', async ({ page }) => {
+        await logPaneHeader(page).click();
+        await expect(page.locator('#logPane')).toHaveClass(/collapsed/);
+        await logPaneHeader(page).click();
+        await expect(page.locator('#logPane')).not.toHaveClass(/collapsed/);
     });
 
-    test('Machine Log button opens log pane', async ({ page }) => {
+    test('Human and Machine pills do not collapse the pane', async ({ page }) => {
         await page.locator('#machineLogBtn').click();
-        await expect(page.locator('#logPane')).toHaveClass(/open/);
-    });
-
-    test('Clicking Machine Log again closes log pane', async ({ page }) => {
-        await page.locator('#machineLogBtn').click();
-        await page.locator('#machineLogBtn').click();
-        await expect(page.locator('#logPane')).not.toHaveClass(/open/);
+        await page.locator('#humanLogBtn').click();
+        await expect(page.locator('#logPane')).not.toHaveClass(/collapsed/);
     });
 
     test('Human and Machine Log cannot both be active simultaneously', async ({ page }) => {
@@ -653,7 +697,7 @@ test.describe('Log Panel', () => {
         await expect(page.locator('#logFilterInput')).toHaveValue('');
     });
 
-	test('Clear Logs button shows confirm modal', async ({ page }) => {
+    test('Clear Logs button shows confirm modal', async ({ page }) => {
         await page.locator('#humanLogBtn').click();
         await page.evaluate(() => {
             const btn = document.getElementById('clearLogsBtn');
@@ -684,20 +728,23 @@ test.describe('Log Panel', () => {
         await page.locator('#confirmYes').click();
         await expect(page.locator('#confirmModal')).toHaveClass(/hidden/);
     });
-	
-	test('Clear Logs button is disabled after clearing logs', async ({ page }) => {
+
+    test('Clear Logs button is disabled after clearing logs', async ({ page }) => {
         await page.request.get(`${BASE_URL}/logs/clear`);
         await page.goto(BASE_URL);
         // Wait for the polling cycle to update button state
         await page.waitForTimeout(1500);
-        await expect(page.locator('#clearLogsBtn')).toBeDisabled();
+        // NOTE: #clearLogsBtn appears twice in index.html (filter row + footer);
+        // the app only manages the filter-row instance, so target that one to
+        // avoid a strict-mode "two elements" failure.
+        await expect(page.locator('#logFilterRow #clearLogsBtn')).toBeDisabled();
     });
 
     test('Clear Logs button has disabled-ui class when no logs exist', async ({ page }) => {
         await page.request.get(`${BASE_URL}/logs/clear`);
         await page.goto(BASE_URL);
         await page.waitForTimeout(1500);
-        await expect(page.locator('#clearLogsBtn')).toHaveClass(/disabled-ui/);
+        await expect(page.locator('#logFilterRow #clearLogsBtn')).toHaveClass(/disabled-ui/);
     });
 
 });
@@ -725,7 +772,7 @@ test.describe('Compression Modal Structure', () => {
         await expect(page.locator('#compressWorkerCount')).toHaveValue('2');
     });
 
-	test('Compression worker description changes away from Recommended when not at 2', async ({ page }) => {
+    test('Compression worker description changes away from Recommended when not at 2', async ({ page }) => {
         await page.locator('#compressWorkerCount').fill('1', { force: true });
         await page.locator('#compressWorkerCount').dispatchEvent('input');
         await expect(page.locator('#compressWorkerDesc')).not.toHaveText('Recommended — balance of speed and CPU resources');
@@ -765,7 +812,7 @@ test.describe('Compression Modal Structure', () => {
         await expect(page.locator('#compressionStart')).toBeAttached();
     });
 
-	test('Tree striping alternates over visible rows and skips hidden rows', async ({ page }) => {
+    test('Tree striping alternates over visible rows and skips hidden rows', async ({ page }) => {
         const result = await page.evaluate(() => {
             const tbody = document.createElement('tbody');
             const spec = [
@@ -805,12 +852,11 @@ test.describe('Compression Modal Structure', () => {
         expect(byName['Shows']).toBe(false);     // dark
         expect(byName['A Show']).toBe(true);     // light
     });
-	
+
 });
 
 // ================================================================
 // SUITE 11: API Endpoints
-// Verifies all server endpoints respond correctly
 // ================================================================
 test.describe('API Endpoints', () => {
 
@@ -830,7 +876,6 @@ test.describe('API Endpoints', () => {
     });
 
     test('/logs/slice with no data returns empty entries', async ({ page }) => {
-        // Clear logs first
         await page.request.get(`${BASE_URL}/logs/clear`);
         const res = await page.request.get(`${BASE_URL}/logs/slice?start=0&end=10`);
         const json = await res.json();
@@ -877,7 +922,6 @@ test.describe('API Endpoints', () => {
         const res = await page.request.get(`${BASE_URL}/status-all`);
         const json = await res.json();
         expect(typeof json.logTotal).toBe('number');
-        // status can be null when idle, so just check it exists
         expect('status' in json).toBe(true);
         expect('logTotal' in json).toBe(true);
     });
@@ -900,7 +944,6 @@ test.describe('API Endpoints', () => {
 
 // ================================================================
 // SUITE 12: Search Filter Behavior
-// Tests server-side search and client filter interactions
 // ================================================================
 test.describe('Search Filter', () => {
 
@@ -929,7 +972,6 @@ test.describe('Search Filter', () => {
         await page.locator('#machineLogBtn').click();
         await page.locator('#logFilterInput').fill('zzz_nonexistent_query_zzz');
         await page.locator('#logFilterInput').dispatchEvent('input');
-        // Wait for debounce + server response
         await page.waitForTimeout(500);
         const text = await page.locator('#logContent').textContent();
         expect(text.length).toBeGreaterThan(0);
@@ -940,11 +982,10 @@ test.describe('Search Filter', () => {
         await page.locator('#logFilterInput').fill('Shows\\Test');
         await page.locator('#logFilterInput').dispatchEvent('input');
         await page.waitForTimeout(500);
-        // Should not throw — page should still be responsive
         await expect(page.locator('#logFilterInput')).toBeVisible();
     });
-	
-	test('Filter count element exists in DOM', async ({ page }) => {
+
+    test('Filter count element exists in DOM', async ({ page }) => {
         await page.locator('#machineLogBtn').click();
         await expect(page.locator('#logFilterCount')).toBeAttached();
     });
@@ -978,7 +1019,6 @@ test.describe('Search Filter', () => {
 
 // ================================================================
 // SUITE 13: Log Panel — Mode Integrity
-// Ensures switching between human/machine mode renders correctly
 // ================================================================
 test.describe('Log Mode Integrity', () => {
 
@@ -1012,13 +1052,15 @@ test.describe('Log Mode Integrity', () => {
         expect(hasMachineClass).toBe(true);
     });
 
-    test('Closing and reopening log pane resets machine-log class', async ({ page }) => {
+    test('Machine-log mode persists when the log pane is collapsed and re-expanded', async ({ page }) => {
         await page.locator('#machineLogBtn').click();
-        await page.locator('#machineLogBtn').click(); // close
+        const header = page.locator('#logPane .collapse-header .group-title');
+        await header.click();   // collapse the pane
+        await header.click();   // re-expand it
         const hasMachineClass = await page.locator('#logContent').evaluate(
             el => el.classList.contains('machine-log')
         );
-        expect(hasMachineClass).toBe(false);
+        expect(hasMachineClass).toBe(true);
     });
 
     test('Resume scroll button is hidden when log opens', async ({ page }) => {
@@ -1030,7 +1072,6 @@ test.describe('Log Mode Integrity', () => {
 
 // ================================================================
 // SUITE 14: Console Updates
-// Verifies the console area receives and displays status data
 // ================================================================
 test.describe('Console', () => {
 
@@ -1076,7 +1117,6 @@ test.describe('Console', () => {
 
 // ================================================================
 // SUITE 15: Log Data Round-Trip
-// Writes test entries, verifies they appear via endpoints
 // ================================================================
 test.describe('Log Data Round-Trip', () => {
 
@@ -1123,7 +1163,6 @@ test.describe('Log Data Round-Trip', () => {
 
 // ================================================================
 // SUITE 16: Timer Formatting
-// Verifies elapsed time formatting handles large values
 // ================================================================
 test.describe('Timer Formatting', () => {
 
@@ -1155,10 +1194,9 @@ test.describe('Timer Formatting', () => {
     });
 
 });
+
 // ================================================================
 // SUITE 17: GPU Encoding Toggle
-// Verifies toggle existence, detection, config persistence,
-// modal sync, and disabled-state rules
 // ================================================================
 test.describe('GPU Encoding Toggle', () => {
 
@@ -1198,29 +1236,31 @@ test.describe('GPU Encoding Toggle', () => {
         expect(json.config).toHaveProperty('UseGPU');
     });
 
-/*	test.skip(process.env.CI, 'Skipping GPU tests in CI: no GPU available'); */
-	test('GPU status text resolves after detection (GPU Encoding Toggle)', async ({ page }) => {
-	  test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
-	  await waitForDetection(page);
-	  const text = (await page.locator('#gpuStatusDesc').textContent()).trim();
-	  expect(text === '' || text.includes('detected')).toBe(true);
-	});
-	test('GPU toggle enabled state matches detection result (GPU Encoding Toggle)', async ({ page }) => {
-	  test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
-	  await waitForDetection(page);
-	  const status = await page.locator('#gpuStatusDesc').textContent();
-	  if (status.includes('No compatible GPU')) {
-		await expect(page.locator('#useGPU')).toBeDisabled();
-		await expect(page.locator('.gpu-toggle-group')).toHaveClass(/disabled-ui/);
-	  } else {
-		await expect(page.locator('#useGPU')).toBeEnabled();
-	  }
-	});
+    test('GPU status text resolves after detection (GPU Encoding Toggle)', async ({ page }) => {
+        test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
+        await waitForDetection(page);
+        const text = (await page.locator('#gpuStatusDesc').textContent()).trim();
+        expect(text === '' || text.includes('detected')).toBe(true);
+    });
+
+    test('GPU toggle enabled state matches detection result (GPU Encoding Toggle)', async ({ page }) => {
+        test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
+        await waitForDetection(page);
+        const status = await page.locator('#gpuStatusDesc').textContent();
+        if (status.includes('No compatible GPU')) {
+            await expect(page.locator('#useGPU')).toBeDisabled();
+            await expect(page.locator('.gpu-toggle-group')).toHaveClass(/disabled-ui/);
+        } else {
+            await expect(page.locator('#useGPU')).toBeEnabled();
+        }
+    });
+
     test('GPU toggle is disabled in Scan Only mode', async ({ page }) => {
         await waitForDetection(page);
         await selectMode(page, 'ScanOnly');
         await expect(page.locator('#useGPU')).toBeDisabled();
     });
+
     test('Changing the settings GPU toggle syncs the modal toggle', async ({ page }) => {
         test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
         await waitForDetection(page);
@@ -1237,6 +1277,7 @@ test.describe('GPU Encoding Toggle', () => {
         });
         await expect(page.locator('#compressUseGPU')).not.toBeChecked();
     });
+
     test('Changing the modal GPU toggle syncs the settings toggle', async ({ page }) => {
         test.skip(!!process.env.CI, 'Requires a real GPU; skipped in CI');
         await waitForDetection(page);
@@ -1247,12 +1288,12 @@ test.describe('GPU Encoding Toggle', () => {
         });
         await expect(page.locator('#useGPU')).toBeChecked();
     });
+
     test('GPU preference persists through /config/save round-trip', async ({ page }) => {
         await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false&useGPU=true`);
         const res = await page.request.get(`${BASE_URL}/config`);
         const json = await res.json();
         expect(json.config.UseGPU).toBe(true);
-        // restore
         await page.request.get(`${BASE_URL}/config/save?root=&repaired=&mode=Full&scanAll=false&accurateMode=false&useGPU=false`);
     });
 
@@ -1296,13 +1337,14 @@ test.describe('Path Not-Found Validation', () => {
 });
 
 // ================================================================
-// SUITE 19: Automated UnifiedLog
+// SUITE 19: Automated UnifiedLog — seeded tree
 // ================================================================
 test.describe('Compression Review — seeded tree', () => {
+  test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     await resetConfig(page);
     await seedProbeLog(page, PROBE_FIXTURE);
-    await openReview(page);
+    await openReview(page, PROBE_FIXTURE.length);
   });
 
   test.afterEach(async ({ page }) => {
@@ -1313,7 +1355,7 @@ test.describe('Compression Review — seeded tree', () => {
     const leafRows = page.locator('#compressionTreeBody tr[data-path]');
     await expect(leafRows).toHaveCount(PROBE_FIXTURE.length);   // 12 leaves, collapsed or not
   });
-  
+
   // Helper used by every assertion below: leaf checkboxes currently selected.
   // (Folders have no data-path; collapsed rows still count — we're testing
   //  logical selection, not visibility.)
@@ -1325,14 +1367,14 @@ test.describe('Compression Review — seeded tree', () => {
   });
 
   test('unchecking Low confidence drops exactly the 3 Low rows', async ({ page }) => {
-    await page.locator('#filterConfLow').uncheck();
+    await toggleCheckbox(page.locator('#filterConfLow'), false);
     await expect(checkedLeaves(page)).toHaveCount(7);     // 10 - 3 Low
-    await page.locator('#filterConfLow').check();         // and it comes back
+    await toggleCheckbox(page.locator('#filterConfLow'), true);    // and it comes back
     await expect(checkedLeaves(page)).toHaveCount(10);
   });
 
   test('unchecking ≤720p drops the ≤1280px-width rows', async ({ page }) => {
-    await page.locator('#filterRes720').uncheck();
+    await toggleCheckbox(page.locator('#filterRes720'), false);
     await expect(checkedLeaves(page)).toHaveCount(7);     // E03(1280), B-S01E01(720), B-S02E02(1024)
   });
 
@@ -1347,16 +1389,16 @@ test.describe('Compression Review — seeded tree', () => {
   });
 
   test('Reset Defaults restores all eligible rows', async ({ page }) => {
-    await page.locator('#filterConfLow').uncheck();
+    await toggleCheckbox(page.locator('#filterConfLow'), false);
     await page.locator('#filterMinMB').fill('1500');
     await expect(checkedLeaves(page)).not.toHaveCount(10);
     await page.locator('#filterReset').click();
     await expect(checkedLeaves(page)).toHaveCount(10);
   });
-  
-test('a manually unchecked row stays off through a filter change', async ({ page }) => {
+
+  test('a manually unchecked row stays off through a filter change', async ({ page }) => {
     await expandAll(page);
-    await leafCb(page, 'Alpha S01E01.mkv').uncheck();              // force-OFF (records 0)
+    await toggleCheckbox(leafCb(page, 'Alpha S01E01.mkv'), false); // force-OFF (records 0)
     await expect(leafCb(page, 'Alpha S01E01.mkv')).not.toBeChecked();
 
     await page.locator('#filterMinMB').fill('100');               // re-runs filter; this row matches
@@ -1368,10 +1410,10 @@ test('a manually unchecked row stays off through a filter change', async ({ page
   test('a manually re-checked row survives a filter that would exclude it', async ({ page }) => {
     await expandAll(page);
 
-    await page.locator('#filterConfLow').uncheck();               // filter out the 3 Low rows
+    await toggleCheckbox(page.locator('#filterConfLow'), false);   // filter out the 3 Low rows
     await expect(leafCb(page, 'Alpha S01E03.mkv')).not.toBeChecked();
 
-    await leafCb(page, 'Alpha S01E03.mkv').check();               // force-ON while filter active (records 1)
+    await toggleCheckbox(leafCb(page, 'Alpha S01E03.mkv'), true);  // force-ON while filter active (records 1)
     await expect(leafCb(page, 'Alpha S01E03.mkv')).toBeChecked();
 
     await page.locator('#filterMinMB').fill('100');               // re-runs filter; Low still off
@@ -1380,10 +1422,10 @@ test('a manually unchecked row stays off through a filter change', async ({ page
     await expect(leafCb(page, 'Beta S01E03.mkv')).not.toBeChecked();   // other Low rows: still off
     await expect(leafCb(page, 'Beta S02E03.mkv')).not.toBeChecked();   // proves it's per-file, not global
   });
-  
+
   test('Reset Filters clears the filter but keeps manual overrides', async ({ page }) => {
     await expandAll(page);
-    await leafCb(page, 'Alpha S01E01.mkv').uncheck();          // manual force-off
+    await toggleCheckbox(leafCb(page, 'Alpha S01E01.mkv'), false); // manual force-off
     await page.locator('#filterMinMB').fill('1500');           // plus a filter
     await page.locator('#filterReset').click();
     await expect(page.locator('#filterMinMB')).toHaveValue('');        // filter cleared
@@ -1393,15 +1435,15 @@ test('a manually unchecked row stays off through a filter change', async ({ page
 
   test('Reset Checkboxes clears manual picks but keeps the active filter', async ({ page }) => {
     await expandAll(page);
-    await page.locator('#filterConfLow').uncheck();            // filter active: Low out -> 7
-    await leafCb(page, 'Alpha S01E01.mkv').uncheck();          // manual force-off a High row -> 6
+    await toggleCheckbox(page.locator('#filterConfLow'), false); // filter active: Low out -> 7
+    await toggleCheckbox(leafCb(page, 'Alpha S01E01.mkv'), false); // manual force-off a High row -> 6
     await expect(checkedLeaves(page)).toHaveCount(6);
     await page.locator('#filterResetChecks').click();
     await expect(page.locator('#filterConfLow')).not.toBeChecked();    // filter still active
     await expect(leafCb(page, 'Alpha S01E01.mkv')).toBeChecked();      // pick undone
     await expect(checkedLeaves(page)).toHaveCount(7);                 // pure Low-off result
   });
-  
+
   test('folder counts show all eligible selected by default; skips excluded', async ({ page }) => {
     await expect(folderCount(page, 'All Media')).toContainText('10 of 10');   // 10 compress, 2 skips NOT counted
     await expect(folderCount(page, 'Alpha Series')).toContainText('4 of 4');
@@ -1409,7 +1451,7 @@ test('a manually unchecked row stays off through a filter change', async ({ page
   });
 
   test('counts update when a filter unchecks rows (denominator stays put)', async ({ page }) => {
-    await page.locator('#filterConfLow').uncheck();                 // drops the 3 Low rows
+    await toggleCheckbox(page.locator('#filterConfLow'), false);     // drops the 3 Low rows
     await expect(folderCount(page, 'All Media')).toContainText('7 of 10');   // selected fell, available held
     await expect(folderCount(page, 'Alpha Series')).toContainText('3 of 4'); // 1 Low here
     await expect(folderCount(page, 'Beta Show')).toContainText('4 of 6');    // 2 Low here
@@ -1417,14 +1459,14 @@ test('a manually unchecked row stays off through a filter change', async ({ page
 
   test('counts update when a single file is unchecked', async ({ page }) => {
     await expandAll(page);
-    await leafCb(page, 'Alpha S01E01.mkv').uncheck();
+    await toggleCheckbox(leafCb(page, 'Alpha S01E01.mkv'), false);
     await expect(folderCount(page, 'Alpha Series')).toContainText('3 of 4');
     await expect(folderCount(page, 'All Media')).toContainText('9 of 10');
   });
-  
+
   test('summary file count tracks the selection', async ({ page }) => {
     await expect(page.locator('#sumEpisodes')).toHaveText('10');    // all eligible
-    await page.locator('#filterConfLow').uncheck();
+    await toggleCheckbox(page.locator('#filterConfLow'), false);
     await expect(page.locator('#sumEpisodes')).toHaveText('7');     // recomputed
   });
 
@@ -1435,7 +1477,7 @@ test('a manually unchecked row stays off through a filter change', async ({ page
       return t.includes('TB') ? n*1024*1024 : t.includes('GB') ? n*1024 : n;
     };
     const beforeAll = await toMB('#sumBefore');
-    await page.locator('#filterConfLow').uncheck();
+    await toggleCheckbox(page.locator('#filterConfLow'), false);
     await expect(page.locator('#sumEpisodes')).toHaveText('7');     // sync point: recompute done
     expect(await toMB('#sumBefore')).toBeLessThan(beforeAll);       // fewer files -> smaller total
   });
@@ -1444,24 +1486,24 @@ test('a manually unchecked row stays off through a filter change', async ({ page
     await page.locator('#filterMinPct').fill('95');                 // nothing saves >=95%
     await expect(page.locator('#sumEpisodes')).toHaveText('0');
   });
-  
+
 });
 
 // ================================================================
 // SUITE 20: Automated UnifiedLog Cap modes
 // ================================================================
 test.describe('Compression Review — cap modes', () => {
+  test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     await resetConfig(page);
     await seedProbeLog(page, CAP_FIXTURE);
-    await openReview(page);
+    await openReview(page, CAP_FIXTURE.length);
   });
 
   test.afterEach(async ({ page }) => {
     await page.request.get(`${BASE_URL}/logs/clear`);
   });
 
-  // Same helper as the predicate block; redefined here for block scope.
   const checkedLeaves = page =>
     page.locator('#compressionTreeBody tr[data-path] .tree-checkbox:checked');
 

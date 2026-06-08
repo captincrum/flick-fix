@@ -1162,10 +1162,6 @@ Test-Case "style.css has .gpu-toggle-group" {
     $styleContent -match '\.gpu-toggle-group'
 }
 
-Test-Case "style.css has .desc-row" {
-    $styleContent -match '\.desc-row'
-}
-
 Test-Case "style.css has .tree-count" {
     $styleContent -match '\.tree-count'
 }

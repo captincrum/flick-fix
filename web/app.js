@@ -996,19 +996,35 @@ function initCollapsibles() {
 
         function toggle() { card.classList.toggle("collapsed"); }
 
+        function paneToggle(isCollapsed) {
+            if (card.classList.contains("pane-fading") || card.classList.contains("pane-revealing")) return;
+            card.classList.add("pane-fading");
+            setTimeout(() => {
+                if (isCollapsed) card.classList.remove("collapsed");
+                else             card.classList.add("collapsed");
+                card.classList.remove("pane-fading");
+                card.classList.add("pane-revealing");
+                setTimeout(() => { card.classList.remove("pane-revealing"); }, 400);
+            }, 350);
+        }
+
         // Collapsed: a click anywhere on the card opens it.
-        // Open: only a click within the header collapses it, so interacting
-        // with the body (sliders, inputs, buttons) never closes the menu.
+        // Open: only a click within the header collapses it.
         card.addEventListener("click", function (e) {
+            const isPane = card.classList.contains("pane");
             if (card.classList.contains("collapsed")) {
-                card.classList.remove("collapsed");
+                isPane ? paneToggle(true) : card.classList.remove("collapsed");
             } else if (h.contains(e.target)) {
-                card.classList.add("collapsed");
+                isPane ? paneToggle(false) : card.classList.add("collapsed");
             }
         });
 
         h.addEventListener("keydown", function (e) {
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                if (card.classList.contains("pane")) paneToggle(card.classList.contains("collapsed"));
+                else toggle();
+            }
         });
     });
     updateSummaries();
@@ -1256,6 +1272,7 @@ splitter.addEventListener("mousedown", e => {
     if (!logOpen) return;
     isResizing = true;
     startX     = e.clientX;
+	document.querySelector(".panes-row").classList.add("dragging");
     document.body.style.cursor = "col-resize";
     document.body.classList.add("no-select");
 });
@@ -1266,9 +1283,8 @@ window.addEventListener("mousemove", e => {
     const rect = row.getBoundingClientRect();
     let ratio  = (e.clientX - rect.left) / rect.width;
     ratio = Math.max(0.2, Math.min(0.8, ratio));
-    const consolePane = document.getElementById("consolePane");
-    consolePane.style.flex = ratio + " 1 0";
-    logPane.style.flex     = (1 - ratio) + " 1 0";
+    row.style.gridTemplateColumns =
+        `calc(${ratio * 100}% - 4px) 8px calc(${(1 - ratio) * 100}% - 4px)`;
 });
 
 window.addEventListener("mouseup", () => {
@@ -1276,12 +1292,13 @@ window.addEventListener("mouseup", () => {
     isResizing = false;
     document.body.style.cursor = "default";
     document.body.classList.remove("no-select");
+	document.querySelector(".panes-row").classList.remove("dragging");
 });
 
 /* Double-click the splitter to reset Console / Live log to 50-50 */
 splitter.addEventListener("dblclick", () => {
-    document.getElementById("consolePane").style.flex = "1 1 0";
-    logPane.style.flex = "1 1 0";
+    document.querySelector(".panes-row").style.gridTemplateColumns =
+        "calc(50% - 4px) 8px calc(50% - 4px)";
 });
 
 
@@ -1835,12 +1852,15 @@ function updateCompressionSummary() {
 
     const savedMB  = origMB - estMB;
     const savedPct = origMB > 0 ? ((savedMB / origMB) * 100).toFixed(1) : 0;
+    const totalCompressible = allRows.filter(r => r.querySelector(".verdict-compress")).length;
+    const selectedCount     = leafRowsForSize.length;
+    const toCompressPct     = totalCompressible > 0 ? ((selectedCount / totalCompressible) * 100).toFixed(1) : 0;
 
-    document.getElementById("sumShows").textContent    = folders.size.toLocaleString();
-    document.getElementById("sumEpisodes").textContent = leafRowsForSize.length.toLocaleString();
-    document.getElementById("sumBefore").textContent   = formatMB(origMB);
-    document.getElementById("sumAfter").textContent    = formatMB(estMB);
-    document.getElementById("sumSaved").textContent    = `${formatMB(savedMB)} (${savedPct}%)`;
+    document.getElementById("sumShows").textContent      = folders.size.toLocaleString();
+    document.getElementById("sumToCompress").textContent  = `${selectedCount.toLocaleString()} / ${totalCompressible.toLocaleString()} (${toCompressPct}%)`;
+    document.getElementById("sumBefore").textContent     = formatMB(origMB);
+    document.getElementById("sumAfter").textContent      = formatMB(estMB);
+    document.getElementById("sumSaved").textContent      = `${formatMB(savedMB)} (${savedPct}%)`;
 }
 
 function syncParentCheckboxes(tbody) {
@@ -2202,16 +2222,17 @@ async function showCompressionModal() {
     }, 0);
     const fileCount   = entries.filter(e => e.Type === "SmartProbe").length;
     const compressCount = entries.filter(e => e.Type === "SmartProbe" && e.Verdict === "Compress").length;
+    const eligiblePct = fileCount > 0 ? ((compressCount / fileCount) * 100).toFixed(1) : 0;
     const savedMB     = root.origMB - root.estMB;
     const savedPct    = root.origMB > 0 ? ((savedMB / root.origMB) * 100).toFixed(1) : 0;
     summary.innerHTML = `
         <div class="summary-grid">
             <span class="summary-label">Number of Folders:</span>
             <span class="summary-value" id="sumShows">${folderCount.toLocaleString()}</span>
-            <span class="summary-label">Number of Files:</span>
-            <span class="summary-value" id="sumEpisodes">${fileCount.toLocaleString()}</span>
-            <span class="summary-label">To Compress:</span>
-            <span class="summary-value">${compressCount.toLocaleString()} / ${fileCount.toLocaleString()}</span>
+            <span class="summary-label">Compression Eligible:</span>
+            <span class="summary-value">${compressCount.toLocaleString()} / ${fileCount.toLocaleString()} (${eligiblePct}%)</span>
+            <span class="summary-label">Files to Compress:</span>
+            <span class="summary-value" id="sumToCompress">0 / ${compressCount.toLocaleString()} (0.0%)</span>
             <span class="summary-label">Size Before:</span>
             <span class="summary-value" id="sumBefore">${formatMB(root.origMB)}</span>
             <span class="summary-label">Size After:</span>

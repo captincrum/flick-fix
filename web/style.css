@@ -768,6 +768,7 @@ input[type="text"] {
 #clearLogsBtn {
     transition: opacity .75s cubic-bezier(0, 0, 0.58, 1);
     width: 85px;
+	height: 24px;
 }
 
 .log-pane.open #clearLogsBtn      { opacity: 1; }
@@ -1007,12 +1008,12 @@ input[type="text"] {
 }
 
 /* ------------------------[ UI: Smart Compression options ]---------------------- */
-#smartOptions {
-    max-height: none;
-    overflow: visible;
+#smartOptions.locked .collapse-body-inner > *:not(.review-row) {
+    opacity: 0.45;
+    pointer-events: none;
 }
 
-#smartOptions.locked > :not(.collapse-header):not(.collapse-summary):not(.review-row) {
+#smartOptions.locked .review-row .has-tip {
     opacity: 0.45;
     pointer-events: none;
 }
@@ -1492,27 +1493,19 @@ input[type="text"] {
 /* ------------------------[ UI: Floating scroll button ]---------------------- */
 .resume-scroll {
     align-items: center;
-/*    background: var(--bg-scroll-btn);*/
     border: 1px solid var(--border-scroll-btn);
     border-radius: 50%;
-    bottom: 41px;
-/*    color: var(--text-on-accent);*/
+    bottom: 46px;
     cursor: pointer;
-    display: flex;
-    font-size: 24px;
-    font-weight: 800;
     height: 40px;
-    justify-content: center;
     position: absolute;
-    right: 48px;
-/*    transition: background 0.15s ease, transform 0.05s ease;*/
+    right: 54px;
     width: 40px;
-    z-index: 50;
 }
 
 .resume-scroll:hover { background: var(--bg-scroll-btn-hover); transform: translateY(-1px); }
 
-#resumeScrollBtn { transition: opacity .75s cubic-bezier(0, 0, 0.58, 1); }
+#resumeScrollBtn { background: var(--bg-scroll-btn-hover); transition: opacity .75s cubic-bezier(0, 0, 0.58, 1); }
 
 .resume-scroll.hidden { opacity: 0; pointer-events: none; }
 
@@ -1542,34 +1535,38 @@ input[type="text"] {
 
 .collapse-header .group-title { margin: 0; }
 
-/* Subtitle lives BELOW the header row, hidden when expanded */
 .collapse-summary {
     color: var(--text-muted);
-    display: none;
     font-size: 12px;
     margin-top: 2px;
+    max-height: 0;
+    opacity: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: max-height 1.5s ease, opacity 1.5s ease;
     white-space: nowrap;
 }
 
-.card.group.collapsed .collapse-summary { display: block; }
+.card.group.collapsed .collapse-summary { max-height: 30px; opacity: 1; }
 
-/* When collapsed, hide all card content except header + summary */
-.card.group.collapsed > :not(.collapse-header):not(.collapse-summary) {
-    display: none !important;
+/* Animated collapse body (CSS grid 0fr/1fr) */
+.collapse-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 1.5s ease;
 }
+.card.group.collapsed .collapse-body { grid-template-rows: 0fr; }
+.collapse-body-inner { min-height: 0; overflow: hidden; }
 
-/* Add spacing between header and content when expanded */
-.card.group:not(.collapsed) .collapse-header {
-    margin-bottom: 10px;
-}
+/* Spacing between header and content, animated */
+.card.group:not(.collapsed) .collapse-header { margin-bottom: 10px; transition: margin-bottom 1.5s ease; }
+.card.group.collapsed .collapse-header { margin-bottom: 0; transition: margin-bottom 1.5s ease; }
 
 .collapse-chevron {
     color: var(--text-muted);
     flex-shrink: 0;
     height: 16px;
-    transition: transform 0.2s ease;
+    transition: transform 1.5s ease;
     width: 16px;
 }
 
@@ -1661,11 +1658,15 @@ input[type="text"] {
 }
 
 .panes-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: calc(50% - 4px) 8px calc(50% - 4px);
     flex: 1;
     gap: 0;
     min-height: 0;
+    transition: grid-template-columns 1.25s ease;
 }
+
+.panes-row.dragging { transition: none; }
 
 .panes-row > .pane {
     display: flex;
@@ -1674,6 +1675,8 @@ input[type="text"] {
     height: auto;
     min-height: 0;
     min-width: 0;
+    overflow: hidden;
+    transition: flex-grow 1.5s ease, flex-basis 1.5s ease, min-width 1.5s ease;
 }
 
 #consolePane { flex: 1 1 0; }
@@ -1683,6 +1686,7 @@ input[type="text"] {
 	width: auto;
 	height: auto;
 	margin: 0; 
+	transition: min-width 1.5s ease;
 }
 
 #logPane .log-viewer { 
@@ -1710,7 +1714,9 @@ input[type="text"] {
     align-items: center;
     display: flex;
     gap: 10px;
+    margin-left: auto;
 }
+
 .log-mode-toggle { display: flex; gap: 4px; }
 .log-mode-toggle .btn.toggle {
     background: transparent;
@@ -1737,20 +1743,60 @@ input[type="text"] {
 
 /* Live log: one-line title, minimum width when open, Clear Logs at the top */
 #logPane .group-title { white-space: nowrap; }
-.panes-row > #logPane:not(.collapsed) { min-width: 400px; }
+.panes-row > #logPane:not(.collapsed) { min-width: 0; }
 #logPane .collapse-header { order: -2; }
 #logPane .log-footer { display: none; }
 
 /* Collapse-to-strip for the bottom panes */
-.pane.collapsed { flex: 0 0 46px !important; }
+.panes-row:has(#consolePane.collapsed) { grid-template-columns: 46px 8px calc(100% - 54px) !important; }
+.panes-row:has(#logPane.collapsed)     { grid-template-columns: calc(100% - 54px) 8px 46px !important; }
+.panes-row:has(#consolePane.collapsed) { grid-template-columns: 46px 8px calc(100% - 54px) !important; }
+.panes-row:has(#logPane.collapsed)     { grid-template-columns: calc(100% - 54px) 8px 46px !important; }
+.panes-row:has(#consolePane.collapsed):has(#logPane.collapsed) { grid-template-columns: 46px 8px 46px !important; }
+.pane > .collapse-header { justify-content: flex-start; }
+.pane > .collapse-header .collapse-chevron { order: -1; }
 .pane.collapsed .collapse-header { align-items: center; flex-direction: column; gap: 10px; }
 .pane.collapsed .group-title { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+
+/* Fade pane body out as the strip closes; the rotating title + chevron stay */
+/* Phased pane collapse: fade out → grid animates → fade in vertical title */
+.pane .group-title,
+.pane .collapse-chevron,
+.pane .log-header-controls,
+#consoleOutput,
+.log-mode-toggle,
+.log-filter-row,
+.log-viewer,
+.resume-scroll { transition: opacity .4s ease-in-out; }
+
+/* Collapsed body stays hidden */
+.pane.collapsed #consoleOutput,
 .pane.collapsed .log-mode-toggle,
 .pane.collapsed .log-filter-row,
-.pane.collapsed .log-footer,
-.pane.collapsed .resume-scroll { display: none !important; }
+.pane.collapsed .log-viewer,
+.pane.collapsed .resume-scroll { opacity: 0 !important; pointer-events: none; }
 .panes-row:has(.pane.collapsed) > .splitter { pointer-events: none; }
-.panes-row:has(.pane.collapsed) > .pane:not(.collapsed) { flex: 1 1 auto !important; }
+
+/* Phase 1: everything fades out before layout changes */
+.pane.pane-fading .group-title,
+.pane.pane-fading .collapse-chevron,
+.pane.pane-fading .log-header-controls,
+.pane.pane-fading #consoleOutput,
+.pane.pane-fading .log-mode-toggle,
+.pane.pane-fading .log-filter-row,
+.pane.pane-fading .log-viewer,
+.pane.pane-fading .resume-scroll { opacity: 0 !important; }
+
+/* Phase 2: hold invisible while grid animates */
+.pane.pane-revealing .group-title,
+.pane.pane-revealing .collapse-chevron,
+.pane.pane-revealing .log-header-controls,
+.pane.pane-revealing #consoleOutput,
+.pane.pane-revealing .log-mode-toggle,
+.pane.pane-revealing .log-filter-row,
+.pane.pane-revealing .log-viewer,
+.pane.pane-revealing .resume-scroll { opacity: 0; }
+
 
 .left-buttons {
     display: flex;
@@ -1780,7 +1826,7 @@ input[type="text"] {
 .panes-row > .pane.collapsed:hover { border-color: var(--accent-strong); }
 
 #logPane .log-filter-row { flex: 0 0 auto; max-width: none; justify-content: flex-start; }
-#logFilterInput { flex: 0 1 auto; min-width: 225px; margin-left: auto; }
+#logFilterInput { flex: 0 1 auto; min-width: 225px; max-height: 23px; margin-left: auto; }
 
 input[type="range"] {
     -webkit-appearance: none;

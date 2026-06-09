@@ -31,6 +31,7 @@
 				</div>
 				<span class="collapse-summary" id="sumSettings"></span>
 
+				<div class="collapse-body"><div class="collapse-body-inner">
 				<div class="field">
 					<label>Library Root:</label>
 					<div class="field-row">
@@ -77,6 +78,7 @@
 						<span id="gpuStatusDesc" class="tip-bubble gpu-status">Detecting GPU…</span>
 					</div>
 				</div>
+				</div></div>
 			</div>
 
 			<div class="card group collapsed">
@@ -86,12 +88,14 @@
 				</div>
 				<span class="collapse-summary" id="sumMode"></span>
 
+				<div class="collapse-body"><div class="collapse-body-inner">
 				<div class="mode-row" style="flex-wrap: wrap; row-gap: 6px;">
 					<label><input type="radio" name="mode" value="Full" checked /> Scan & repair</label>
 					<label><input type="radio" name="mode" value="ScanOnly" /> Scan</label>
 					<label><input type="radio" name="mode" value="RepairOnly" /> Repair</label>
 					<label><input type="radio" name="mode" value="SmartCompression" /> Smart compression</label>
 				</div>
+			</div></div>
 			</div>
 
 			<div id="smartOptions" class="card group collapsed">
@@ -100,6 +104,7 @@
 					<svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
 				</div>
 				<span class="collapse-summary" id="sumSmart"></span>
+				<div class="collapse-body"><div class="collapse-body-inner">
 
 				<div class="toggle-row review-row">
 					<div class="has-tip" style="display:flex; align-items:center; gap:8px;">
@@ -122,6 +127,7 @@
 					</div>
 					<span id="crfDesc" class="tip-bubble">Recommended - ~97.5% quality retained</span>
 				</div>
+			</div></div>
 			</div>
         <div class="left-buttons">
                 <button id="startBtn" class="btn primary">Start</button>
@@ -152,8 +158,8 @@
                             <button id="humanLogBtn" class="btn toggle active">Human</button>
                             <button id="machineLogBtn" class="btn toggle">Machine</button>
                         </div>
-                        <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </div>
+					<svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </div>
 
                 <div id="logFilterRow" class="log-filter-row">
@@ -198,6 +204,7 @@
                         <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </div>
 					<span class="collapse-summary" id="sumOptions"></span>
+					<div class="collapse-body"><div class="collapse-body-inner">
                     <div class="compression-output-section">
                         <label class="comp-label">Compressed Root:</label>
                         <div class="field-row">
@@ -222,6 +229,7 @@
                         <span class="toggle-label">GPU</span>
                         <span id="compressGpuStatusDesc" class="tip-bubble"></span>
                     </div>
+				</div></div>
                 </div>
 
                 <div class="card group" style="margin-top:0px;">
@@ -232,6 +240,7 @@
                         <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </div>
 					<span class="collapse-summary" id="sumFilter"></span>
+					<div class="collapse-body"><div class="collapse-body-inner">
 
                     <div class="filter-cols">
                         <div class="filter-col" id="filterConfCol">
@@ -299,6 +308,7 @@
                         <button id="filterReset" class="btn small">Reset Filters</button>
                         <button id="filterResetChecks" class="btn small">Reset Checkbox</button>
                     </div>
+				</div></div>
                 </div>
 
                 <div class="card group" style="margin-top:0px;">

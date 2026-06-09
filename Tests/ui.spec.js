@@ -1557,9 +1557,9 @@ test.describe('Compression Review — seeded tree', () => {
   });
 
   test('summary file count tracks the selection', async ({ page }) => {
-    await expect(page.locator('#sumEpisodes')).toHaveText('10');    // all eligible
+    await expect(page.locator('#sumToCompress')).toHaveText(/^10 \/ 10/);  // all eligible
     await toggleCheckbox(page.locator('#filterConfLow'), false);
-    await expect(page.locator('#sumEpisodes')).toHaveText('7');     // recomputed
+    await expect(page.locator('#sumToCompress')).toHaveText(/^7 \/ 10/);   // recomputed
   });
 
   test('summary size totals shrink when the selection shrinks', async ({ page }) => {
@@ -1570,15 +1570,14 @@ test.describe('Compression Review — seeded tree', () => {
     };
     const beforeAll = await toMB('#sumBefore');
     await toggleCheckbox(page.locator('#filterConfLow'), false);
-    await expect(page.locator('#sumEpisodes')).toHaveText('7');     // sync point: recompute done
-    expect(await toMB('#sumBefore')).toBeLessThan(beforeAll);       // fewer files -> smaller total
+    await expect(page.locator('#sumToCompress')).toHaveText(/^7 \/ 10/);   // sync point: recompute done
+    expect(await toMB('#sumBefore')).toBeLessThan(beforeAll);              // fewer files -> smaller total
   });
 
   test('summary zeroes out when nothing qualifies', async ({ page }) => {
     await page.locator('#filterMinPct').fill('95');                 // nothing saves >=95%
-    await expect(page.locator('#sumEpisodes')).toHaveText('0');
+    await expect(page.locator('#sumToCompress')).toHaveText(/^0 \/ 10/);
   });
-
 });
 
 // ================================================================

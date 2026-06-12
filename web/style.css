@@ -914,11 +914,9 @@ input[type="text"] {
     border-radius: 20px;
     flex: 1 1 0;
     font-size: 12px;
-    max-width: 400px;
     min-width: 150px;
     padding: 7px 10px;
 }
-
 #logFilterClear {
     border-radius: 50px;
     flex-shrink: 0;
@@ -930,7 +928,7 @@ input[type="text"] {
     color: var(--text-muted);
     flex-shrink: 0;
     font-size: 11px;
-    order: -1;
+    margin-left: auto;
     white-space: nowrap;
 }
 
@@ -1643,7 +1641,7 @@ input[type="text"] {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    flex: 0 0 350px;
+    flex: 0 0 315px;
     gap: 5px;
     overflow-y: auto;
     background: var(--bg-elevated);
@@ -1826,7 +1824,7 @@ input[type="text"] {
 .panes-row > .pane.collapsed:hover { border-color: var(--accent-strong); }
 
 #logPane .log-filter-row { flex: 0 0 auto; max-width: none; justify-content: flex-start; }
-#logFilterInput { flex: 0 1 auto; min-width: 225px; max-height: 23px; margin-left: auto; }
+#logFilterInput { flex: 0 1 auto; min-width: 225px; max-height: 23px; }
 
 input[type="range"] {
     -webkit-appearance: none;

@@ -1595,6 +1595,13 @@ input[type="text"] {
 .tip-bubble:empty        { display: none !important; }
 .has-tip:hover .tip-bubble { display: block; }
 
+#smartMethodDesc {
+    bottom: auto;
+    top: calc(100% + 6px);
+    white-space: nowrap;
+    max-width: none;
+}
+
 #startBtn {
     background: transparent;
     border: 1px solid var(--border-card);

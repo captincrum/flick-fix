@@ -1,10 +1,28 @@
 # FlickFix
 
-**Automatically scan, repair, quality-check, and compress your movie and TV library — with a clean web GUI, GPU-accelerated x265, and no command line required.**
+![Platform](https://img.shields.io/badge/platform-Windows-blue)
+![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-175%20unit%20%7C%20188%20UI-brightgreen)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-FlickFix is a full media-maintenance system built on PowerShell with a modern web-based GUI. It scans movie and TV libraries for corruption, repairs damaged video files, evaluates quality, and intelligently compresses your library with FFmpeg and x265 (HEVC) — including hardware acceleration on NVIDIA, AMD, and Intel GPUs. Everything runs locally from a clean, themeable interface.
+**Automatically scan, repair, quality-check, and batch-compress your Plex or Jellyfin movie and TV library — with a clean web GUI, GPU-accelerated x265 (HEVC), and no command line required.**
+
+FlickFix is a full media-maintenance system built on PowerShell with a modern web-based GUI. It scans Plex, Jellyfin, and Emby media libraries for corruption, repairs damaged video files, evaluates quality, and intelligently compresses your library with FFmpeg and x265 (HEVC) to reduce file size — including hardware-accelerated transcoding on NVIDIA, AMD, and Intel GPUs. Everything runs locally from a clean, themeable interface.
 
 ![FlickFix dashboard — scan, repair, and x265 compress your Plex or Jellyfin library with GPU acceleration and no command line required](assets/hero.png)
+
+---
+
+## Quick Start
+
+```powershell
+git clone https://github.com/captincrum/flick-fix.git
+cd flick-fix
+pwsh web/server.ps1   # or: powershell web/server.ps1 on Windows PowerShell 5.1
+```
+
+The GUI opens automatically in your default browser — no install, no console window. Point it at your library, pick a mode, and go.
 
 ---
 

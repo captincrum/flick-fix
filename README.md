@@ -67,6 +67,7 @@ The GUI opens automatically in your default browser — no install, no console w
 - Interactive Compression Review tree — expand shows, seasons, and files; check/uncheck before compressing
 - **Filter & cap system:** narrow by confidence, resolution, minimum MB, or minimum % saved; cap a run by Top savers, Total saved, or target output size
 - Sticky manual selections that survive filter and cap changes
+- **Compact selection state:** manual checks/unchecks are persisted as collapsed exceptions (e.g. a single entry for an unchecked show rather than one per episode), keeping `config.json` under 1 KB even for libraries of 25,000+ files
 - Estimated savings shown per file, season, show, and library total
 - Disk-space check before compression begins
 - Parallel compression with a separate worker count control
@@ -181,13 +182,17 @@ Settings are saved automatically to `config.json`:
 | UseGPU | Use hardware encoder when available (true/false) |
 | CompressionOutputPath | Output path for compressed files |
 
+Manual compression selections are stored separately from these settings as a compact set of exceptions. Because only user-overridden items are recorded — and they are collapsed to the highest applicable level (show, then season, then file) — the selection state stays tiny regardless of library size, well under 1 KB even across 25,000+ files.
+
 ---
 
 ## Testing
 
 - **175** PowerShell unit tests across 18 suites
 - **188** Playwright UI tests across 22 suites
-- Run via `Tests/Run-Tests.ps1` (unit) and Playwright (`npm test`)
+- **Smoke tests** generate dummy media files and exercise the full scan → repair → compress pipeline end to end, verifying the system works as a whole rather than only in isolation
+- **Continuous integration (GitHub Actions)** runs the full unit and UI suites automatically on every push and pull request, so regressions are caught before they merge
+- Run locally via `Tests/Run-Tests.ps1` (unit) and Playwright (`npm test`)
 
 ---
 
